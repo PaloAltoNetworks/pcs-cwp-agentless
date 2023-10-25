@@ -1,0 +1,324 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stack for creating a Subnet and Security Group for Agentless Scanning
+Metadata: {}
+Mappings: {}
+Conditions: {}
+Outputs: {}
+Parameters:
+  VpcCidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/16
+    Description: VPC CIDR Block (eg 10.0.0.0/16)
+    Type: String
+  SubnetName:
+    AllowedPattern: '[-_a-zA-Z0-9]+'
+    Default: prismacloud-agentless-subnet
+    Description: Provide the name of the Subnet for Agentless Scanning
+    Type: String
+  SubnetCidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/24
+    Description: Subnet CIDR Block for Agentless Scanning (eg 10.0.0.0/24)
+    Type: String
+  SecurityGroupName:
+    AllowedPattern: '[-_a-zA-Z0-9]+'
+    Default: prismacloud-agentless-sg
+    Description: Provide the name of the Security Group for Agentless Scanning instance
+    Type: String
+  SecurityGroupEgress:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 34.75.54.101/32
+    Description: Provide IP addresses segment allowed for Outbound Access for Prisma Cloud Compute (reference https://docs.prismacloud.io/en/classic/cspm-admin-guide/get-started-with-prisma-cloud/enable-access-prisma-cloud-console)
+    Type: String
+  OrganizationalUnitIds:
+    AllowedPattern: ^(ou-|r-)[a-z0-9-]+(?:,( )*(ou-|r-)[a-z0-9-]+)*$
+    Description: Provide the organizational root OU ID (Prefix like r-) if you want to run it for all the accounts under this Organization. Else provide a comma-separated list of OU ids(Prefix like ou-).
+    Type: CommaDelimitedList
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value:
+            Ref: AWS::StackName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value:
+          Ref: AWS::StackName
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: InternetGateway
+      VpcId:
+        Ref: VPC
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 
+            Ref: 'AWS::StackName'
+      VpcId:
+        Ref: VPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+      RouteTableId:
+        Ref: RouteTable
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock:  
+        Ref: SubnetCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: 
+            Ref: SubnetName
+      VpcId: 
+        Ref: VPC
+  SubnetAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RouteTable
+      SubnetId:
+        Ref: Subnet
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName:
+        Ref: SecurityGroupName
+      GroupDescription: SG for Prisma Cloud Agentless Scanning
+      VpcId: 
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: 
+            Ref: SecurityGroupName
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          Description: HTTPS access to Prisma Cloud Compute Console
+          CidrIp: 
+            Ref: SecurityGroupEgress
+  StackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      OperationPreferences:
+        FailureTolerancePercentage: 100
+        RegionConcurrencyType: PARALLEL
+      Parameters:
+        - ParameterKey: VpcCidr
+          ParameterValue: 
+            Ref: VpcCidr
+        - ParameterKey: SubnetName
+          ParameterValue: 
+            Ref: SubnetName
+        - ParameterKey: SubnetCidr
+          ParameterValue: 
+            Ref: SubnetCidr
+        - ParameterKey: SecurityGroupName
+          ParameterValue: 
+            Ref: SecurityGroupName
+        - ParameterKey: SecurityGroupEgress
+          ParameterValue: 
+            Ref: SecurityGroupEgress
+      PermissionModel: SERVICE_MANAGED
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds: 
+              Ref: OrganizationalUnitIds
+          Regions:
+            - Ref: AWS::Region
+      StackSetName:
+        Ref: AWS::StackName
+      TemplateBody: |
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Description": "Stack for creating a Subnet and Security Group for Agentless Scanning",
+          "Parameters": {
+            "VpcCidr": {
+              "AllowedPattern": "((\\d{1,3})\\.){3}\\d{1,3}/\\d{1,2}",
+              "Default": "10.0.0.0/16",
+              "Description": "VPC CIDR Block (eg 10.0.0.0/16)",
+              "Type": "String"
+            },
+            "SubnetName": {
+              "AllowedPattern": "[-_a-zA-Z0-9]+",
+              "Default": "prismacloud-agentless-subnet",
+              "Description": "Provide the name of the Subnet for Agentless Scanning",
+              "Type": "String"
+            },
+            "SubnetCidr": {
+              "AllowedPattern": "((\\d{1,3})\\.){3}\\d{1,3}/\\d{1,2}",
+              "Default": "10.0.0.0/24",
+              "Description": "Subnet CIDR Block for Agentless Scanning (eg 10.0.0.0/24)",
+              "Type": "String"
+            },
+            "SecurityGroupName": {
+              "AllowedPattern": "[-_a-zA-Z0-9]+",
+              "Default": "prismacloud-agentless-sg",
+              "Description": "Provide the name of the Security Group for Agentless Scanning instance",
+              "Type": "String"
+            },
+            "SecurityGroupEgress": {
+              "AllowedPattern": "((\\d{1,3})\\.){3}\\d{1,3}/\\d{1,2}",
+              "Default": "34.75.54.101/32",
+              "Description": "Provide IP addresses segment allowed for Outbound Access for Prisma Cloud Compute (reference https://docs.prismacloud.io/en/classic/cspm-admin-guide/get-started-with-prisma-cloud/enable-access-prisma-cloud-console)",
+              "Type": "String"
+            }
+          },
+          "Resources": {
+            "VPC": {
+              "Type": "AWS::EC2::VPC",
+              "Properties": {
+                "CidrBlock": {
+                  "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value": {
+                      "Ref": "AWS::StackName"
+                    }
+                  }
+                ]
+              }
+            },
+            "InternetGateway": {
+              "Type": "AWS::EC2::InternetGateway",
+              "Properties": {
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value": {
+                      "Ref": "AWS::StackName"
+                    }
+                  }
+                ]
+              }
+            },
+            "GatewayAttachment": {
+              "Type": "AWS::EC2::VPCGatewayAttachment",
+              "Properties": {
+                "InternetGatewayId": {
+                  "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                  "Ref": "VPC"
+                }
+              }
+            },
+            "RouteTable": {
+              "Type": "AWS::EC2::RouteTable",
+              "Properties": {
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value": {
+                      "Ref": "AWS::StackName"
+                    }
+                  }
+                ],
+                "VpcId": {
+                  "Ref": "VPC"
+                }
+              }
+            },
+            "PublicRoute": {
+              "Type": "AWS::EC2::Route",
+              "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                  "Ref": "InternetGateway"
+                },
+                "RouteTableId": {
+                  "Ref": "RouteTable"
+                }
+              }
+            },
+            "Subnet": {
+              "Type": "AWS::EC2::Subnet",
+              "Properties": {
+                "CidrBlock": {
+                  "Ref": "SubnetCidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value": {
+                      "Ref": "SubnetName"
+                    }
+                  }
+                ],
+                "VpcId": {
+                  "Ref": "VPC"
+                }
+              }
+            },
+            "SubnetAssoc": {
+              "Type": "AWS::EC2::SubnetRouteTableAssociation",
+              "Properties": {
+                "RouteTableId": {
+                  "Ref": "RouteTable"
+                },
+                "SubnetId": {
+                  "Ref": "Subnet"
+                }
+              }
+            },
+            "SecurityGroup": {
+              "Type": "AWS::EC2::SecurityGroup",
+              "DependsOn": "VPC",
+              "Properties": {
+                "GroupName": {
+                  "Ref": "SecurityGroupName"
+                },
+                "GroupDescription": "SG for Prisma Cloud Agentless Scanning",
+                "VpcId": {
+                  "Ref": "VPC"
+                },
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value": {
+                      "Ref": "SecurityGroupName"
+                    }
+                  }
+                ],
+                "SecurityGroupEgress": [
+                  {
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "Description": "HTTPS access to Prisma Cloud Compute Console",
+                    "CidrIp": {
+                      "Ref": "SecurityGroupEgress"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }

@@ -63,18 +63,20 @@ def updateAgentlessConfig(data, api_endpoint, token, verify):
     return update.status_code
 
 
-def format_tags(tags_list):
+def format_tags(tags_list, list_name=""):
     tags_formatted = []
 
     for tag in tags_list:
         if "=" not in tag:
-            print(f"Invalid format: {tag}")
+            print(f"Tag '{tag}' has invalid format in tag list '{list_name}'")
+            tags_list.remove(tag)
             continue
 
         key, value = tag.split("=")
 
         if not value:
-            print(f"Tag {key} doesn't have any value.")
+            print(f"Tag '{key}' doesn't have any value in tag list '{list_name}'")
+            tags_list.remove(tag)
             continue
 
         tags_formatted.append({
@@ -134,9 +136,9 @@ if __name__ == "__main__":
             if subnet_name: account["agentlessScanSpec"]["subnet"] = subnet_name
             if auto_scale: account["agentlessScanSpec"]["autoScale"] = auto_scale.lower() == "true"
             if regions: account["agentlessScanSpec"]["regions"] = regions
-            if include_tags: account["agentlessScanSpec"]["includedTags"] = format_tags(include_tags)
-            if exclude_tags: account["agentlessScanSpec"]["excludedTags"] = format_tags(exclude_tags)
-            if custom_tags: account["agentlessScanSpec"]["customTags"] = format_tags(custom_tags)
+            if include_tags: account["agentlessScanSpec"]["includedTags"] = format_tags(include_tags, "include-tags")
+            if exclude_tags: account["agentlessScanSpec"]["excludedTags"] = format_tags(exclude_tags, "exclude-tags")
+            if custom_tags: account["agentlessScanSpec"]["customTags"] = format_tags(custom_tags, "custom-tags")
             if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
             if scanners: account["agentlessScanSpec"]["scanners"] = scanners
 
