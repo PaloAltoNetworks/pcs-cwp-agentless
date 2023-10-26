@@ -101,7 +101,7 @@ To apply such template is required to enable **Trusted access for AWS Account Ma
 ### Applying the template
 You can apply the template from the AWS Console on **CloudFormation** > **Stacks** > **Create Stack** or downloading the template file and applying it via AWS CLI:
 
- `$ aws cloudformation create-stack --stack-name agentless-scanner --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-1tx6`
+ `$ aws cloudformation create-stack --stack-name agentless-scanner --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-0000 --region us-east-1`
 
 You must add any other parameter if you want to override any default value.
 
