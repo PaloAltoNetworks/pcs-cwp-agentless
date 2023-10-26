@@ -1,7 +1,7 @@
-# pcs-cwp-agentless
+# Prisma Cloud API Agentless
 Prisma Cloud API management of Cloud Accounts, specifically around agentless. 
 
-This script is meant for updating agentless configuration for multiple cloud accounts. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
+This script is meant for updating agentless configuration for multiple cloud accounts for agentless scanning in **Same Account** mode. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
 
 ## Usage
 Here is general view of the script and all it's parameters:
@@ -15,7 +15,7 @@ Here is general view of the script and all it's parameters:
 * ```--compute-api-endpoint``` (required): API endpoint of the Prisma Cloud Compute console. For SaaS version, you can find this in the Compute console under **Manage** > **System** > **Utilities**. 
 * ```--subnet-name``` (optional): Name of the subnet to be used for agentless scanning spot instance. The subnet must have been created in the cloud account.
 * ```--security-group-name``` (optional): Name of the security group to be used for agentless scanning spot instance. The security group must have been created in the cloud account.
-* ```--auto-sc*ale``` (optional): Enables or disables autoscaling for agentless scanning spot instances. It can only be **true** or **false**.
+* ```--auto-scale``` (optional): Enables or disables autoscaling for agentless scanning spot instances. It can only be **true** or **false**.
 * ```--regions``` (optional): Scope of regions to be scanned. The region code must be used (eg. us-east-1 for AWS North Virginia).
 * ```--include-tags``` (optional): Scope of instances to be included in the scan by the tags they have. This must not be used together with the parameter ```--exclude-tags```. The format of each tag should be **key=value**. Once used, it will remove the excluded tags in the agentless configuration.
 * ```--exclude-tags``` (optional): Scope of instances to be excluded from the scan by the tags they have. This must not be used together with the parameter ```--include-tags```. The format of each tag should be **key=value**. Once used, it will remove the included tags in the agentless configuration.
@@ -24,7 +24,9 @@ Here is general view of the script and all it's parameters:
 * ```--scanners``` (optional): Maximum number of scanner spot instances to be deployed on the cloud. It's maximum value is **10**.
 * ```--skip-tls-verify``` (optional): Skip TLS verification of the Compute API Endpoint.
 
-**NOTE**: If an optional parameter is not included, the value of it will remain the same as it was configured before. 
+> **NOTE**
+> * If an optional parameter is not included, the value of it will remain the same as it was configured before. 
+> <br/><br/>
 
 ### Environment variables
 Instead of explicitly input the values of some parameters in the script, you can substitute them by using environment variables. Those variables are:
@@ -50,9 +52,10 @@ In order to grant the least privileges to a user or service account in the SaaS 
 
 Once created this permissions group, you must create a role and then the belonging user or service account.
 
-**NOTE**: You must assing an account group to the role. Any account group will work. 
-
-**NOTE**: Is recommended to use a service account and access key.
+>**NOTES**
+> * You must assing an account group to the role. Any account group will work. 
+> * Is recommended to use a service account and access key.
+> <br/><br/>
 
 ### Prisma Cloud self-hosted version
 In order to grant the least privileges to a user in the self-hosted version of Prisma Cloud, you must create a role with Read and Write for the Cloud Account Policy permission and no access to the Console IU. While you are creating a Role, the Cloud Account Policy permission can be found under the Manage tab as in the following image:
@@ -68,7 +71,9 @@ Install requirements:
 
 It's recommended to use a virtual environment.
 
-**NOTE**: This script was tested in Python 3.10 and pip version 22.3.1.
+> **NOTE** 
+> * This script was tested in Python 3.10 and pip version 22.3.1.
+> <br/><br/>
 
 ## CloudFormation template
 A cloudFormation template has been added to this repo with the purpose of creating the VPC, subnet and security group for the agentless scanning spot instances on an entire AWS Organization, or on certain organization units, with the minimum required inbound and outbound rules for the security group in order to successfully connect to the Prisma Cloud Compute console. 
@@ -96,7 +101,7 @@ To apply such template is required to enable **Trusted access for AWS Account Ma
 ### Applying the template
 You can apply the template from the AWS Console on **CloudFormation** > **Stacks** > **Create Stack** or downloading the template file and applying it via AWS CLI:
 
- `$ aws cloudformation create-stack --stack-name myteststack --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-0000`
+ `$ aws cloudformation create-stack --stack-name agentless-scanner --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-1tx6`
 
 You must add any other parameter if you want to override any default value.
 
@@ -111,8 +116,8 @@ Once done you can run the script as follows:
 
 `$ python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg ...OTHER_PARAMETERS`
 
-**NOTE**: The last command assumed that you are using the CloudFormation template default values.
-
-**NOTE**: All the commands can be run as is in bash shell or Z shell. 
-
-**NOTE**: Pending GCP and Azure
+> **NOTES** 
+> * The last command assumed that you are using the CloudFormation template default values.
+> * All the commands can be run as is in bash shell or Z shell. 
+> * Pending GCP and Azure subnet and security group implementation 
+> <br/><br/>
