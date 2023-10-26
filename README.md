@@ -52,7 +52,7 @@ In order to grant the least privileges to a user or service account in the SaaS 
 
 Once created this permissions group, you must create a role and then the belonging user or service account.
 
->**NOTES**
+>**NOTE**
 > * You must assing an account group to the role. Any account group will work. 
 > * Is recommended to use a service account and access key.
 > <br/><br/>
@@ -116,7 +116,7 @@ Once done you can run the script as follows:
 
 `$ python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg ...OTHER_PARAMETERS`
 
-> **NOTES** 
+> **NOTE** 
 > * The last command assumed that you are using the CloudFormation template default values.
 > * All the commands can be run as is in bash shell or Z shell. 
 > * Pending GCP and Azure subnet and security group implementation 
