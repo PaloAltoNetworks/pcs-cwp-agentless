@@ -103,7 +103,7 @@ You can apply the template from the AWS Console on **CloudFormation** > **Stacks
 
  `$ aws cloudformation create-stack --stack-name agentless-scanner --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-0000 --region us-east-1`
 
-You must add any other parameter if you want to override any default value.
+You must add any other parameter if you want to override any default value and change the value of OrganizationalUnitIds.
 
 ### Integrate template with script
 In order to integrate this template once applied with the ```configAgentless.py``` script, first you need to get the account ids where the stack was applied by running de following commands:
