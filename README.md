@@ -6,7 +6,7 @@ This script is meant for updating agentless configuration for multiple cloud acc
 ## Usage
 Here is general view of the script and all it's parameters:
 
-```python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --scan-non-running true/false --scanners N --skip-tls-verify```
+```$ python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --scan-non-running true/false --scanners N --skip-tls-verify```
 
 ### Parameters
 * ```--account-ids``` (required): Ids of the cloud accounts you want to set the parameters of agentless scanning. The account must be onboarded already by Prisma Cloud and agentless scanning should be already enabled.
@@ -64,7 +64,7 @@ Once created this role, you must create the belonging user.
 ## Install dependencies
 Install requirements:
 
-`pip install -r requirements.txt`
+`$ pip install -r requirements.txt`
 
 It's recommended to use a virtual environment.
 
@@ -96,23 +96,23 @@ To apply such template is required to enable **Trusted access for AWS Account Ma
 ### Applying the template
 You can apply the template from the AWS Console on **CloudFormation** > **Stacks** > **Create Stack** or downloading the template file and applying it via AWS CLI:
 
- `aws cloudformation create-stack --stack-name myteststack --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-0000`
+ `$ aws cloudformation create-stack --stack-name myteststack --template-body file:///agentlessSubnetSGTemplate.yaml --parameters ParameterKey=OrganizationalUnitIds,ParameterValue=r-0000`
 
 You must add any other parameter if you want to override any default value.
 
 ### Integrate template with script
 In order to integrate this template once applied with the ```configAgentless.py``` script, first you need to get the account ids where the stack was applied by running de following commands:
 
-`ROOT_ACCOUNT=$(aws sts get-caller-identity --query "Account" --output text)`
+`$ ROOT_ACCOUNT=$(aws sts get-caller-identity --query "Account" --output text)`
 
-`MEMBER_ACCOUNTS=$(aws cloudformation list-stack-instances --stack-set-name agentless-scanner | jq -c '.Summaries[].Account' | sed -e 's/"//g')`
+`$ MEMBER_ACCOUNTS=$(aws cloudformation list-stack-instances --stack-set-name agentless-scanner | jq -c '.Summaries[].Account' | sed -e 's/"//g')`
 
 Once done you can run the script as follows:
 
-`python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg`
+`$ python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg ...OTHER_PARAMETERS`
 
 **NOTE**: The last command assumed that you are using the CloudFormation template default values.
 
-**NOTE**: The previous commands can be run as is in bash shell or Z shell. 
+**NOTE**: All the commands can be run as is in bash shell or Z shell. 
 
 **NOTE**: Pending GCP and Azure
