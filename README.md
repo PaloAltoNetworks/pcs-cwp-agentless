@@ -46,7 +46,7 @@ The value of SKIP_VERIFY must be 0 or 1.
 ### Prisma Cloud SaaS version
 In order to grant the least privileges to a user or service account in the SaaS version of Prisma Cloud, you must create a Permissions Group with View and Update for the Cloud Account Policy permission. While you are creating a Permissions Group, the Cloud Account Policy permission can be found under **Assing Permissions** > **Compute** > **Manage** as in the following image:
 
-![Least Privileges Permissions Group - Prisma Cloud SaaS version](/images/saas-least-privileges.png)
+![Least Privileges Permissions Group - Prisma Cloud SaaS version](./images/saas-least-privileges.png)
 
 Once created this permissions group, you must create a role and then the belonging user or service account.
 
@@ -57,7 +57,7 @@ Once created this permissions group, you must create a role and then the belongi
 ### Prisma Cloud self-hosted version
 In order to grant the least privileges to a user in the self-hosted version of Prisma Cloud, you must create a role with Read and Write for the Cloud Account Policy permission and no access to the Console IU. While you are creating a Role, the Cloud Account Policy permission can be found under the Manage tab as in the following image:
 
-![Least Privileges Role - Prisma Cloud self-hosted version](/images/self-hosted-least-privileges.png)
+![Least Privileges Role - Prisma Cloud self-hosted version](./images/self-hosted-least-privileges.png)
 
 Once created this role, you must create the belonging user.
 
