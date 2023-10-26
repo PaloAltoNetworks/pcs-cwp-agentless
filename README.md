@@ -40,7 +40,7 @@ Instead of explicitly input the values of some parameters in the script, you can
 |  SECURITY_GROUP_NAME |  ```--security-group-name``` |
 |      SKIP_VERIFY     |   ```--skip-tls-verify```    |
 
-You can either use it as an OS environment variable or write a .env file with this variables included.
+You can either use it as an OS environment variable or write a .env file with this variables included, but if the parameter is input while running the script, this will override the environment variable.
 
 The value of SKIP_VERIFY must be 0 or 1.
 
