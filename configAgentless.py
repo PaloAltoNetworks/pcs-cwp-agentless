@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 parser = argparse.ArgumentParser(
-    prog='Prisma Cloud Agentless Subnet-SG config',
+    prog='python3 configAgentless.py',
     description='This sets up the subnet and security group in Prisma Cloud for Agentless scanning',
-    epilog=''
+    epilog='For further documentation go to: https://github.com/PaloAltoNetworks/pcs-cwp-agentless'
 )
 
 COMPUTE_API_ENDPOINT = os.getenv("COMPUTE_API_ENDPOINT", "api.prismacloud.io")
@@ -69,14 +69,12 @@ def format_tags(tags_list, list_name=""):
     for tag in tags_list:
         if "=" not in tag:
             print(f"Tag '{tag}' has invalid format in tag list '{list_name}'")
-            tags_list.remove(tag)
             continue
 
         key, value = tag.split("=")
 
         if not value:
             print(f"Tag '{key}' doesn't have any value in tag list '{list_name}'")
-            tags_list.remove(tag)
             continue
 
         tags_formatted.append({
@@ -110,9 +108,9 @@ if __name__ == "__main__":
     compute_api_endpoint = args.compute_api_endpoint
     subnet_name = args.subnet_name
     security_group_name = args.security_group_name
-    exclude_tags = args.exclude_tags
-    include_tags = args.include_tags
-    custom_tags = args.custom_tags
+    exclude_tags = format_tags(args.exclude_tags, "Excluded Tags")
+    include_tags = format_tags(args.include_tags, "Included Tags")
+    custom_tags = format_tags(args.custom_tags, "Custom tags")
     scan_non_running = args.scan_non_running
     scanners = args.scanners
     regions = args.regions
@@ -136,9 +134,17 @@ if __name__ == "__main__":
             if subnet_name: account["agentlessScanSpec"]["subnet"] = subnet_name
             if auto_scale: account["agentlessScanSpec"]["autoScale"] = auto_scale.lower() == "true"
             if regions: account["agentlessScanSpec"]["regions"] = regions
-            if include_tags: account["agentlessScanSpec"]["includedTags"] = format_tags(include_tags, "include-tags")
-            if exclude_tags: account["agentlessScanSpec"]["excludedTags"] = format_tags(exclude_tags, "exclude-tags")
-            if custom_tags: account["agentlessScanSpec"]["customTags"] = format_tags(custom_tags, "custom-tags")
+            if include_tags: 
+                account["agentlessScanSpec"]["includedTags"] = include_tags
+                if "excludedTags" in account["agentlessScanSpec"]:
+                    del account["agentlessScanSpec"]["excludedTags"]
+
+            if exclude_tags: 
+                account["agentlessScanSpec"]["excludedTags"] = exclude_tags
+                if "includedTags" in account["agentlessScanSpec"]:
+                    del account["agentlessScanSpec"]["includedTags"]
+
+            if custom_tags: account["agentlessScanSpec"]["customTags"] = custom_tags
             if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
             if scanners: account["agentlessScanSpec"]["scanners"] = scanners
 
