@@ -117,7 +117,7 @@ Once done you can run the script as follows:
 `$ python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg ...OTHER_PARAMETERS`
 
 > **NOTE** 
-> * The last command assumed that you are using the CloudFormation template default values and you have installed the JSON Processor package **jq**.
+> * The last commands assumed that you are using the CloudFormation template default values and you have installed the JSON Processor **jq**.
 > * All the commands can be run as is in bash shell or Z shell. 
 > * Pending GCP and Azure subnet and security group implementation 
 > <br/><br/>
