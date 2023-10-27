@@ -127,6 +127,7 @@ if __name__ == "__main__":
     accounts = getCloudAccountsList(compute_api_endpoint, token, verify)
     data = []
     accounts_updated = []
+
     for account in accounts:
         if account["credentialId"] in account_ids:
             accounts_updated.append(account["credentialId"])
@@ -157,8 +158,15 @@ if __name__ == "__main__":
     status_code = updateAgentlessConfig(data, compute_api_endpoint, token, verify)
     
     if status_code == 200:
-        print(f"Successfully updated accounts: {', '.join(accounts_updated)}")
+        if accounts_updated:
+            print(f"Successfully updated accounts: {', '.join(accounts_updated)}")
+        else:
+            print("Successfully updated accounts: None")
+
         if account_ids:
             print(f"Failed while updating accounts: {', '.join(account_ids)}")
         else:
             print("Failed while updating accounts: None")
+    
+    else:
+        print(f"Verify that the user or service account used has a role with read and write access to the Cloud Account Policy permission and, for Prisma Cloud SaaS version, has assigned any account group that contains the Account IDs: {', '.join(accounts_updated + account_ids)}")
