@@ -99,6 +99,7 @@ if __name__ == "__main__":
     parser.add_argument("-S", "--scanners", type=int, default=1, choices=list(range(1, 11)), help="Maximum number of scanners")
     parser.add_argument("-n","--scan-non-running", type=str, choices=["true", "false"], help="enables or disables scanning of non running hosts")
     parser.add_argument("-A","--auto-scale", type=str, choices=["true", "false"], help="enables or disables autoscaling")
+    parser.add_argument("-C","--enforce-permissions-check", type=str, choices=["true", "false"], help="if is set to true the account won't be scanned if there are missing permissions")
     parser.add_argument("--skip-tls-verify", action="store_false", default=SKIP_VERIFY, help="Skip TLS verification")
 
     args = parser.parse_args()
@@ -115,6 +116,7 @@ if __name__ == "__main__":
     scanners = args.scanners
     regions = args.regions
     auto_scale = args.auto_scale
+    enforce_permissions_check = args.enforce_permissions_check
     verify = not args.skip_tls_verify
 
     if exclude_tags and include_tags:
@@ -147,6 +149,7 @@ if __name__ == "__main__":
             if custom_tags: account["agentlessScanSpec"]["customTags"] = custom_tags
             if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
             if scanners: account["agentlessScanSpec"]["scanners"] = scanners
+            if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
 
             data.append(account)
             account_ids.remove(account["credentialId"])
