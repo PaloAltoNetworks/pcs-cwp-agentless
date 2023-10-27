@@ -6,7 +6,7 @@ This script is meant for updating agentless configuration for multiple cloud acc
 ## Usage
 Here is general view of the script and all it's parameters:
 
-```$ python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --scan-non-running true/false --scanners N --skip-tls-verify```
+```$ python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --scan-non-running true/false --scanners N --enforce-permissions-check true/false --skip-tls-verify```
 
 ### Parameters
 * ```--account-ids``` (required): Ids of the cloud accounts you want to set the parameters of agentless scanning. The account must be onboarded already by Prisma Cloud and agentless scanning should be already enabled.
@@ -22,6 +22,7 @@ Here is general view of the script and all it's parameters:
 * ```--custom-tags``` (optional): Tags that will be added to the agentless scanning spot instance. The format of each tag should be **key=value**.
 * ```--scan-non-running``` (optional): Enables or disables the scanning of non running instances in your cloud environment. It can only be **true** or **false**.
 * ```--scanners``` (optional): Maximum number of scanner spot instances to be deployed on the cloud. It's maximum value is **10**.
+* ```--enforce-permissions-check``` (optional): Enables or disables checking for missing permissions on the cloud account configuration on Prisma Cloud. If permissions are missing the scan won't be performed. It can only be **true** or **false**.
 * ```--skip-tls-verify``` (optional): Skip TLS verification of the Compute API Endpoint.
 
 > **NOTE**
