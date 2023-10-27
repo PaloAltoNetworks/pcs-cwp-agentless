@@ -54,7 +54,7 @@ In order to grant the least privileges to a user or service account in the SaaS 
 Once created this permissions group, you must create a role and then the belonging user or service account.
 
 >**NOTE**
-> * You must assing an account group to the role. Any account group will work. 
+> * You must assing an account group to the role. Be sure to add the account groups of the accounts you need to modify. 
 > * Is recommended to use a service account and access key.
 > <br/><br/>
 
