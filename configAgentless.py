@@ -133,10 +133,25 @@ if __name__ == "__main__":
             accounts_updated.append(account["credentialId"])
             del account["modified"]
             del account["credential"]
-            if security_group_name: account["agentlessScanSpec"]["securityGroup"] = security_group_name
-            if subnet_name: account["agentlessScanSpec"]["subnet"] = subnet_name
+            if security_group_name: 
+                if security_group_name.lower() == "none":
+                    account["agentlessScanSpec"]["securityGroup"] = ""
+                else:         
+                    account["agentlessScanSpec"]["securityGroup"] = security_group_name
+            
+            if subnet_name: 
+                if subnet_name.lower() == "none":
+                    account["agentlessScanSpec"]["subnet"] = ""
+                else:
+                    account["agentlessScanSpec"]["subnet"] = subnet_name
+            
             if auto_scale: account["agentlessScanSpec"]["autoScale"] = auto_scale.lower() == "true"
-            if regions: account["agentlessScanSpec"]["regions"] = regions
+            if regions: 
+                if regions[0].lower() == "none":
+                    account["agentlessScanSpec"]["regions"] = []
+                else:
+                    account["agentlessScanSpec"]["regions"] = regions
+            
             if include_tags: 
                 account["agentlessScanSpec"]["includedTags"] = include_tags
                 if "excludedTags" in account["agentlessScanSpec"]:
