@@ -60,6 +60,7 @@ def updateAgentlessConfig(data, api_endpoint, token, verify):
     }
 
     update = requests.put(f"{api_endpoint}/api/v1/cloud-scan-rules", headers=headers, json=data, verify=verify)
+    print(update.text)
     return update.status_code
 
 
@@ -90,8 +91,8 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--username", type=str, default=PRISMA_USERNAME, help="Prisma Cloud Access Key Id")
     parser.add_argument("-p", "--password", type=str, default=PRISMA_PASSWORD, help="Prisma Cloud Secret Key")
     parser.add_argument("-e", "--compute-api-endpoint", type=str, default=COMPUTE_API_ENDPOINT, help="Prisma Cloud Compute Api Endpoint")
-    parser.add_argument("-s", "--subnet-name", type=str, default=SUBNET_NAME, help="Subnet Name used for agentless configuration")
-    parser.add_argument("-g", "--security-group-name", type=str, default=SECURITY_GROUP_NAME, help="Security Group Name used for agentless configuration")
+    parser.add_argument("-s", "--subnet-name", type=str, default=SUBNET_NAME, help="Subnet Name used for agentless configuration. If set to the value 'none', Prisma Cloud will create the VPC and subnet for you")
+    parser.add_argument("-g", "--security-group-name", type=str, default=SECURITY_GROUP_NAME, help="(AWS, Azure and OCI only) Security Group Name used for agentless configuration. If set to the value 'none', Prisma Cloud will create the security group for you")
     parser.add_argument("-x", "--exclude-tags", nargs='+', default=[], help="Exclude hosts based on tags")
     parser.add_argument("-i", "--include-tags", nargs='+', default=[], help="Include hosts based on tags")
     parser.add_argument("-c", "--custom-tags", nargs='+', default=[], help="Custom tags for the spot instance deployed")
@@ -100,6 +101,8 @@ if __name__ == "__main__":
     parser.add_argument("-n","--scan-non-running", type=str, choices=["true", "false"], help="enables or disables scanning of non running hosts")
     parser.add_argument("-A","--auto-scale", type=str, choices=["true", "false"], help="enables or disables autoscaling")
     parser.add_argument("-C","--enforce-permissions-check", type=str, choices=["true", "false"], help="if is set to true the account won't be scanned if there are missing permissions")
+    parser.add_argument("-O", "--oci-excluded-compartments", nargs='+', default=[], help="(OCI Only) Exclude by name the compartments to be scanned")
+    parser.add_argument("-o", "--oci-vcn", type=str, help="(OCI Only) scan VCN name")
     parser.add_argument("--skip-tls-verify", action="store_false", default=SKIP_VERIFY, help="Skip TLS verification")
 
     args = parser.parse_args()
@@ -115,6 +118,8 @@ if __name__ == "__main__":
     scan_non_running = args.scan_non_running
     scanners = args.scanners
     regions = args.regions
+    oci_excluded_compartments = args.oci_excluded_compartments
+    oci_vcn = args.oci_vcn
     auto_scale = args.auto_scale
     enforce_permissions_check = args.enforce_permissions_check
     verify = not args.skip_tls_verify
@@ -129,16 +134,42 @@ if __name__ == "__main__":
     accounts_updated = []
 
     for account in accounts:
-        if account["credentialId"] in account_ids:
-            accounts_updated.append(account["credentialId"])
+        if account["credential"]["cloudProviderAccountID"] in account_ids:
+            account_id = account["credential"]["cloudProviderAccountID"]
+            cloud_type = account["credential"]["type"]
             del account["modified"]
             del account["credential"]
+
+            if cloud_type == "oci":
+                if not subnet_name or subnet_name.lower() == "none":
+                    if oci_vcn and oci_vcn.lower() != "none":
+                        print("VCN cannot appear without subnet. Subnet Name is required")
+                        print(f"Skipping account ID: {account_id}...")
+                        continue
+                    
+                    if security_group_name and security_group_name.lower() != "none":
+                        if not oci_vcn or oci_vcn.lower() == "none":
+                            print("Security group cannot appear without VCN. VCN Name is required")
+
+                        print("Security group cannot appear without subnet. Subnet Name is required")
+                        print(f"Skipping account ID: {account_id}...")
+                        continue
+                
+                else:
+                    if not oci_vcn or oci_vcn.lower() == "none":
+                        print("Subnet cannot appear without VCN. VCN Name is required")
+                        print(f"Skipping account ID: {account_id}...")
+                        continue
+
             if security_group_name: 
-                if security_group_name.lower() == "none":
-                    account["agentlessScanSpec"]["securityGroup"] = ""
-                else:         
-                    account["agentlessScanSpec"]["securityGroup"] = security_group_name
-            
+                if cloud_type in ("aws", "azure", "oci"):
+                    if security_group_name.lower() == "none":
+                        account["agentlessScanSpec"]["securityGroup"] = ""
+                    else:         
+                        account["agentlessScanSpec"]["securityGroup"] = security_group_name
+                else:
+                    print(f"{account_id} is not an AWS, Azure or OCI account. Skipped Security Group config")
+
             if subnet_name: 
                 if subnet_name.lower() == "none":
                     account["agentlessScanSpec"]["subnet"] = ""
@@ -151,7 +182,25 @@ if __name__ == "__main__":
                     account["agentlessScanSpec"]["regions"] = []
                 else:
                     account["agentlessScanSpec"]["regions"] = regions
-            
+
+            if oci_excluded_compartments:
+                if cloud_type == "oci":
+                    if oci_excluded_compartments[0].lower() == "none":
+                        account["agentlessScanSpec"]["ociExcludedCompartments"] = []
+                    else:
+                        account["agentlessScanSpec"]["ociExcludedCompartments"] = oci_excluded_compartments
+                else:
+                    print(f"{account_id} is not an OCI account. Skipped Excluded Compartments")
+
+            if oci_vcn: 
+                if cloud_type == "oci":
+                    if oci_vcn.lower() == "none":
+                        account["agentlessScanSpec"]["ociVcn"] = ""
+                    else:
+                        account["agentlessScanSpec"]["ociVcn"] = oci_vcn
+                else:
+                    print(f"{account_id} is not an OCI account. Skipped VCN name setup")
+
             if include_tags: 
                 account["agentlessScanSpec"]["includedTags"] = include_tags
                 if "excludedTags" in account["agentlessScanSpec"]:
@@ -168,7 +217,8 @@ if __name__ == "__main__":
             if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
 
             data.append(account)
-            account_ids.remove(account["credentialId"])
+            accounts_updated.append(account_id)
+            account_ids.remove(account_id)
     
     status_code = updateAgentlessConfig(data, compute_api_endpoint, token, verify)
     
@@ -184,4 +234,4 @@ if __name__ == "__main__":
             print("Failed while updating accounts: None")
     
     else:
-        print(f"Verify that the user or service account used has a role with read and write access to the Cloud Account Policy permission and, for Prisma Cloud SaaS version, has assigned any account group that contains the Account IDs: {', '.join(accounts_updated + account_ids)}")
+        print(f"Verify parameters input, and verify that the user or service account used has a role with read and write access to the Cloud Account Policy permission and, for Prisma Cloud SaaS version, has assigned any account group that contains the Account IDs: {', '.join(accounts_updated + account_ids)}")
