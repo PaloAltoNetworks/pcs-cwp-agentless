@@ -124,7 +124,8 @@ Once done you can run the script as follows:
 `$ python3 configAgentless.py --account-ids $ROOT_ACCOUNT $MEMBER_ACCOUNTS --subnet-name prismacloud-agentless-subnet --security-group-name prismacloud-agentless-sg ...OTHER_PARAMETERS`
 
 > **NOTE** 
+> * This script works for AWS, Azure, GCP and OCI
 > * The last commands is assumed that you are using the CloudFormation template default values and you have installed the JSON Processor **jq**.
 > * All the commands can be run as is in bash shell or Z shell. 
-> * Pending GCP and Azure subnet and security group implementation 
+> * Pending GCP and Azure subnet and security group auto implementation via Terraform. 
 > <br/><br/>
