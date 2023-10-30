@@ -17,10 +17,10 @@ Here is general view of the script and all it's parameters:
 * ```--username``` (required): Name of the user to be used. For Prisma Cloud SaaS version, this would be the value of the Access Key ID if you are using access keys.
 * ```--password``` (required): Password of the user to be used. For Prisma Cloud SaaS version, this would be the value of the Secret Key if you are using access keys.
 * ```--compute-api-endpoint``` (required): API endpoint of the Prisma Cloud Compute console. For SaaS version, you can find this in the Compute console under **Manage** > **System** > **Utilities**. 
-* ```--subnet-name``` (optional): Name of the subnet to be used for agentless scanning spot instance. The subnet must have been created in the cloud account.
-* ```--security-group-name``` (optional): Name of the security group to be used for agentless scanning spot instance. The security group must have been created in the cloud account.
+* ```--subnet-name``` (optional): Name of the subnet to be used for agentless scanning spot instance. The subnet must have been created in the cloud account. If you want a blank value, set this parameter to **none**.
+* ```--security-group-name``` (optional): Name of the security group to be used for agentless scanning spot instance. The security group must have been created in the cloud account. If you want a blank value, set this parameter to **none**.
 * ```--auto-scale``` (optional): Enables or disables autoscaling for agentless scanning spot instances. It can only be **true** or **false**.
-* ```--regions``` (optional): Scope of regions to be scanned. The region code must be used (eg. us-east-1 for AWS North Virginia).
+* ```--regions``` (optional): Scope of regions to be scanned. The region code must be used (eg. us-east-1 for AWS North Virginia). If you want a blank value, set this parameter to **none**.
 * ```--include-tags``` (optional): Scope of instances to be included in the scan by the tags they have. This must not be used together with the parameter ```--exclude-tags```. The format of each tag should be **key=value**. Once used, it will remove the excluded tags in the agentless configuration.
 * ```--exclude-tags``` (optional): Scope of instances to be excluded from the scan by the tags they have. This must not be used together with the parameter ```--include-tags```. The format of each tag should be **key=value**. Once used, it will remove the included tags in the agentless configuration.
 * ```--custom-tags``` (optional): Tags that will be added to the agentless scanning spot instance. The format of each tag should be **key=value**.
