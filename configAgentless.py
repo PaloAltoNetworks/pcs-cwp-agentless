@@ -66,6 +66,8 @@ def updateAgentlessConfig(data, api_endpoint, token, verify):
 
 def format_tags(tags_list, list_name=""):
     tags_formatted = []
+    if tags_list == ["none"]:
+        return tags_list
 
     for tag in tags_list:
         if "=" not in tag:
@@ -202,16 +204,29 @@ if __name__ == "__main__":
                     print(f"{account_id} is not an OCI account. Skipped VCN name setup")
 
             if include_tags: 
-                account["agentlessScanSpec"]["includedTags"] = include_tags
+                if include_tags == ["none"]:
+                    account["agentlessScanSpec"]["includedTags"] = []
+                else:
+                    account["agentlessScanSpec"]["includedTags"] = include_tags
+                    
                 if "excludedTags" in account["agentlessScanSpec"]:
                     del account["agentlessScanSpec"]["excludedTags"]
 
             if exclude_tags: 
-                account["agentlessScanSpec"]["excludedTags"] = exclude_tags
+                if exclude_tags == ["none"]:
+                    account["agentlessScanSpec"]["excludedTags"] = []
+                else:
+                    account["agentlessScanSpec"]["excludedTags"] = exclude_tags
+
                 if "includedTags" in account["agentlessScanSpec"]:
                     del account["agentlessScanSpec"]["includedTags"]
 
-            if custom_tags: account["agentlessScanSpec"]["customTags"] = custom_tags
+            if custom_tags: 
+                if custom_tags == ["none"]:
+                    account["agentlessScanSpec"]["customTags"] = []
+                else:
+                    account["agentlessScanSpec"]["customTags"] = custom_tags
+            
             if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
             if scanners: account["agentlessScanSpec"]["scanners"] = scanners
             if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
