@@ -112,6 +112,10 @@ You can apply the template from the AWS Console on **CloudFormation** > **Stacks
 
 You must add any other parameter if you want to override any default value and change the value of OrganizationalUnitIds.
 
+> **NOTE**
+> * The CloudFormation template **must** be applied to each AWS region where you have resources deployed.
+> <br/><br/>
+
 ### Integrate template with script
 In order to integrate this template once applied with the ```configAgentless.py``` script, first you need to get the account ids where the stack was applied by running de following commands:
 
