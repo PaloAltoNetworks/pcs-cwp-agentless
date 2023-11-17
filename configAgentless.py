@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(
     epilog='For further documentation go to: https://github.com/PaloAltoNetworks/pcs-cwp-agentless'
 )
 
-COMPUTE_API_ENDPOINT = os.getenv("COMPUTE_API_ENDPOINT", "api.prismacloud.io")
+COMPUTE_API_ENDPOINT = os.getenv("COMPUTE_API_ENDPOINT", "https://us-east1.cloud.twistlock.com/us-1-23456789")
 PRISMA_USERNAME = os.getenv("PRISMA_USERNAME", "")
 PRISMA_PASSWORD = os.getenv("PRISMA_PASSWORD", "")
 SUBNET_NAME = os.getenv("SUBNET_NAME", "")
