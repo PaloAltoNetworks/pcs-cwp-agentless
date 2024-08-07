@@ -1,7 +1,7 @@
 # Prisma Cloud Compute API Agentless
 Prisma Cloud Compute API management of Cloud Accounts, specifically around agentless. 
 
-This script is meant for updating agentless configuration for multiple cloud accounts for agentless scanning in **Same Account** mode. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
+This script is meant for updating agentless configuration for multiple cloud accounts for agentless scanning in **Same Account** mode and **Hub Account** mode. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
 
 ## Requirements
 1. Cloud account must be already onboarded by Prisma Cloud
