@@ -1,5 +1,5 @@
 # Prisma Cloud Compute API Agentless
-Prisma Cloud Compute API management of Cloud Accounts, specifically around Agentless scanning of VMs, Containers and Serverless Functions. 
+Prisma Cloud Compute API management of Cloud Accounts, specifically around scanning VMs, Containers and Serverless Functions using agentless features ([Agentless Scanning](https://docs.prismacloud.io/en/enterprise-edition/content-collections/runtime-security/agentless-scanning/agentless-scanning) for VMs and Containers, and [Serverless Scanning](https://docs.prismacloud.io/en/enterprise-edition/content-collections/runtime-security/vulnerability-management/scan-serverless-functions) for Functions). 
 
 This script is meant for updating serverless and agentless configuration for multiple cloud accounts. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
 
