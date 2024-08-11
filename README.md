@@ -1,7 +1,7 @@
 # Prisma Cloud Compute API Agentless
-Prisma Cloud Compute API management of Cloud Accounts, specifically around agentless. 
+Prisma Cloud Compute API management of Cloud Accounts, specifically around Agentless scanning of VMs, Containers and Serverless Functions. 
 
-This script is meant for updating agentless configuration for multiple cloud accounts for agentless scanning in **Same Account** mode and **Hub Account** mode. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
+This script is meant for updating serverless and agentless configuration for multiple cloud accounts. It also works for SaaS and self-hosted versions of Prisma Cloud Compute.
 
 ## Requirements
 1. Cloud account must be already onboarded by Prisma Cloud
@@ -10,9 +10,10 @@ This script is meant for updating agentless configuration for multiple cloud acc
 ## Usage
 Here is general view of the script and all it's parameters:
 
-```$ python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --organization-id $ORGANIZATION_ID -organization-type $ORGANIZATION_TYPE --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --prisma-api-endpoint $PRISMA_API_ENDPOINT --hub-account-id $HUB_ACCOUNT_ID --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --oci-excluded-compartments $COMPARTMENT_1 $COMPARTMENT_2 ... $COMPARTMENT_N --oci-vcn $OCI_VCN --scan-non-running true/false --scanners N --enforce-permissions-check true/false --set-as-hub```
+```$ python3 configAgentless.py --account-ids $ACCOUNT_1 $ACCOUNT_2 ... $ACCOUNT_N --organization-id $ORGANIZATION_ID -organization-type $ORGANIZATION_TYPE --username $PRISMA_USERNAME --password $PRISMA_PASSWORD --compute-api-endpoint $COMPUTE_API_ENDPOINT --prisma-api-endpoint $PRISMA_API_ENDPOINT --hub-account-id $HUB_ACCOUNT_ID --subnet-name $SUBNET_NAME --security-group-name $SECURITY_GROUP_NAME --auto-scale true/false --regions $REGION_1 $REGION_2 ... $REGION_N --include-tags/--exclude-tags $TAG_1=VALUE_1 $TAG_2=VALUE_2 ... $TAG_N=VALUE_N --custom-tags $CUSTOM_TAG_1=VAlUE_1 $CUSTOM_TAG_2=VAlUE_2 ... $CUSTOM_TAG_N=VAlUE_N --oci-excluded-compartments $COMPARTMENT_1 $COMPARTMENT_2 ... $COMPARTMENT_N --oci-vcn $OCI_VCN --scan-non-running true/false --scanners N --enforce-permissions-check true/false --set-as-hub --scan-latest true/false --scan-cap $SCAN_CAP --scan-layers true/false --radar-cap $RADAR_CAP --radar-latest true/false```
 
 ### Parameters
+#### VM and Container Scanning Parameters (Agentless Scanning)
 * ```--account-ids``` (optional): Ids of the cloud accounts you want to set the parameters of agentless scanning. If not set it is required the values of --organization-id and --organization-type.
 * ```--organization-id``` (optional): Id of the organization you want to set the parameters of agentless scanning. The organization must be onboarded in Prisma Cloud.
 * ```--organization-type``` (optional): type of the organization Id. Must be: aws, gcp or azure.
@@ -34,6 +35,14 @@ Here is general view of the script and all it's parameters:
 * ```--scanners``` (optional): Maximum number of scanner spot instances to be deployed on the cloud. It's maximum value is **10**.
 * ```--enforce-permissions-check``` (optional): Enables or disables checking for missing permissions on the cloud account configuration on Prisma Cloud. If permissions are missing the scan won't be performed. It can only be **true** or **false**.
 * ```--set-as-hub``` (optional): Set the accounts to be the Hub Account.
+
+#### Function Scanning Parameters (Serverless Scanning)
+* ```--scan-latest``` (optional): Enables or disables the scanning of the latest serverless functions only. If set to true, it will scan only the latest version of serverless functions. It can only be **true** or **false**.
+* ```----scan-cap``` (optional): Set the limit of how many functions will be scanned for vulnerabilities and compliance. If set to **0**, it will scan all the functions.
+* ```--scan-layers``` (optional): Enables or disables the scanning of the lambda layers. It can only be **true** or **false**. Only available for AWS.
+* ```--radar-cap``` (optional): Set the limit of how many functions will be graphed in the Serverless Radar. Cannot be **0**. Only available for AWS.
+* ```--radar-latest``` (optional): Enables or disables the radar view of the latest serverless functions only. If set to true, it will graph the radar of only the latest version of serverless functions. It can only be **true** or **false**. Only available for AWS.
+
 
 > **NOTE**
 > * If an optional parameter is not included, the value of it will remain the same as it was configured before. 

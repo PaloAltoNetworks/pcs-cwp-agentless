@@ -112,6 +112,7 @@ def format_tags(tags_list, list_name=""):
 
 
 if __name__ == "__main__":
+    # Agentless Parameters
     parser.add_argument("-a", "--account-ids", nargs='+', default=[], help="Account IDs where the agentless configuration shall be applied")
     parser.add_argument("-H", "--hub-account-id", type=str, default=HUB_ACCOUNT_ID, help="ID of the account to be set as Hub")
     parser.add_argument("-G", "--organization-id", type=str, default=ORGANIZATION_ID, help="Organization ID where the agentless configuration shall be applied to all member accounts")
@@ -135,8 +136,17 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--limit", type=int, default=LIMIT, help="Set the limit of accounts to be retrieved while getting the accounts information")
     parser.add_argument("-B", "--bulk-update-count", type=int, default=BULK_UPDATE_COUNT, help="Set the amount of accounts to be updated at once")
     parser.add_argument("--set-as-hub", action="store_true", help="Set the account as Hub")
+    
+    # Serverless Arguments
+    parser.add_argument("--scan-latest", type=str, choices=["true", "false"], help="if is set to true, it will scan only the latest version of serverless functions")
+    parser.add_argument("--scan-cap", type=str, help="The limit of how many functions will be scanned for vulnerabilities and compliance. If set to 0, it will scann all the functions")
+    parser.add_argument("--scan-layers", type=str, choices=["true", "false"], help="if is set to true, it will scan the lambda functions layers. Only applicable for AWS cloud accounts")
+    parser.add_argument("--radar-cap", type=int, help="The amount of functions to be graphed in the Radar view. Minimum is 1")
+    parser.add_argument("--radar-latest", type=str, choices=["true", "false"], help="If set to true, it show the radar view of only the latest version of the functions")
 
     args = parser.parse_args()
+
+    # Agentless arguments
     account_ids = args.account_ids
     hub_account_id = args.hub_account_id
     organization_id = args.organization_id
@@ -160,6 +170,13 @@ if __name__ == "__main__":
     limit = args.limit
     bulk_update_count = args.bulk_update_count
     set_as_hub = args.set_as_hub
+
+    # Serverless arguments
+    scan_latest = args.scan_latest
+    scan_cap = args.scan_cap
+    scan_layers = args.scan_layers
+    radar_cap = args.radar_cap
+    radar_latest = args.radar_latest
 
     if exclude_tags and include_tags:
         parser.error("--include-tags and --exclude-tags cannot be used at the same time.")
@@ -224,6 +241,7 @@ if __name__ == "__main__":
             del account["modified"]
             del account["credential"]
 
+            # Agentless Parameters
             if cloud_type == "oci":
                 if not subnet_name or subnet_name.lower() == "none":
                     if oci_vcn and oci_vcn.lower() != "none":
@@ -244,6 +262,7 @@ if __name__ == "__main__":
                         print("Subnet cannot appear without VCN. VCN Name is required")
                         print(f"Skipping account ID: {account_id}...")
                         continue
+
 
             if security_group_name: 
                 if cloud_type in ("aws", "azure", "oci"):
@@ -321,6 +340,15 @@ if __name__ == "__main__":
                 account["agentlessScanSpec"]["scanners"] = 0
                 account["agentlessScanSpec"]["autoScale"] = False
                 account["agentlessScanSpec"]["skipPermissionsCheck"] = True
+
+            # Severless Parameters
+            if scan_latest: account["serverlessScanSpec"]["scanAllVersions"] = scan_latest == "false"
+            if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
+
+            if cloud_type == "aws":
+                if scan_layers: account["serverlessScanSpec"]["scanLayers"] = scan_layers == "true"
+                if radar_cap: account["serverlessRadarCap"] = radar_cap
+                if radar_latest: account["discoverAllFunctionVersions"] = radar_latest == "false"
 
             data.append(account)
             accounts_updated.append(account_id)
