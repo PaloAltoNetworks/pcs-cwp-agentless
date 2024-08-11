@@ -38,7 +38,7 @@ Here is general view of the script and all it's parameters:
 
 #### Function Scanning Parameters (Serverless Scanning)
 * ```--scan-latest``` (optional): Enables or disables the scanning of the latest serverless functions only. If set to true, it will scan only the latest version of serverless functions. It can only be **true** or **false**.
-* ```----scan-cap``` (optional): Set the limit of how many functions will be scanned for vulnerabilities and compliance. If set to **0**, it will scan all the functions.
+* ```--scan-cap``` (optional): Set the limit of how many functions will be scanned for vulnerabilities and compliance. If set to **0**, it will scan all the functions.
 * ```--scan-layers``` (optional): Enables or disables the scanning of the lambda layers. It can only be **true** or **false**. Only available for AWS.
 * ```--radar-cap``` (optional): Set the limit of how many functions will be graphed in the Serverless Radar. Cannot be **0**. Only available for AWS.
 * ```--radar-latest``` (optional): Enables or disables the radar view of the latest serverless functions only. If set to true, it will graph the radar of only the latest version of serverless functions. It can only be **true** or **false**. Only available for AWS.
