@@ -20,7 +20,7 @@ Here is general view of the script and all it's parameters:
 * ```--organization-type``` (optional): type of the organization Id. Must be: aws, gcp or azure.
 * ```--username``` (required): Name of the user to be used. For Prisma Cloud SaaS version, this would be the value of the Access Key ID if you are using access keys.
 * ```--password``` (required): Password of the user to be used. For Prisma Cloud SaaS version, this would be the value of the Secret Key if you are using access keys.
-* ```--prisma-api-endpoint``` (optional): API endpoint of [Prisma Cloud](https://pan.dev/prisma-cloud/api/cspm/api-urls/). Required if `--organization-id exists.
+* ```--prisma-api-endpoint``` (optional): API endpoint of [Prisma Cloud](https://pan.dev/prisma-cloud/api/cspm/api-urls/). Required if ```--organization-id``` exists.
 * ```--compute-api-endpoint``` (optional): API endpoint of the Prisma Cloud Compute console. For SaaS version, you can find this in the Compute console under **Runtime Security** > **Manage** > **System** > **Utilities**. Not required if set --prisma-api-endpoint.
 * ```--hub-account-id``` (optional): Id of the Cloud account to be set as Hub.
 * ```--subnet-name``` (optional): Name of the subnet to be used for agentless scanning spot instance. The subnet must have been created in the cloud account. If you want a blank value, meaning that Prisma Cloud will create the VPC and subnet for you, set this parameter to **none**.
