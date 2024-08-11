@@ -5,7 +5,8 @@ This script is meant for updating serverless and agentless configuration for mul
 
 ## Requirements
 1. Cloud account must be already onboarded by Prisma Cloud
-2. Agentless scanning must be already enabled
+2. Agentless scanning must be already enabled if any Agentless parameters is used.
+3. Serverless scanning must be already enabled if any Serverless parameters is used.
 
 ## Usage
 Here is general view of the script and all it's parameters:
