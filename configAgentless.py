@@ -437,37 +437,36 @@ if __name__ == "__main__":
     compute_token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body))["token"]
     headers["Authorization"] = f"Bearer {compute_token}"
 
-    # Updating Hub Account
-    print(f"Updating Hub Account: {hub_account_id}")
-    hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET"))[0]
-    updated_hub_account = update_account_config(
-        hub_account, 
-        subnet_name, 
-        security_group_name, 
-        auto_scale, regions, 
-        include_tags, 
-        exclude_tags,
-        custom_tags,
-        scan_non_running,
-        scanners,
-        enforce_permissions_check,
-        "true",
-        "",
-        oci_vcn, 
-        oci_excluded_compartments,
-        scan_latest,
-        scan_cap,
-        scan_layers,
-        radar_cap,
-        radar_latest
-    )
-
-    updateAgentlessConfig([updated_hub_account], compute_api_endpoint)
-
     accounts = getCloudAccountsList(compute_api_endpoint, limit, organization_type)
     data = []
 
     if hub_account_id:
+        # Updating Hub Account
+        print(f"Updating Hub Account: {hub_account_id}")
+        hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET"))[0]
+        updated_hub_account = update_account_config(
+            hub_account, 
+            subnet_name, 
+            security_group_name, 
+            auto_scale, regions, 
+            include_tags, 
+            exclude_tags,
+            custom_tags,
+            scan_non_running,
+            scanners,
+            enforce_permissions_check,
+            "true",
+            "",
+            oci_vcn, 
+            oci_excluded_compartments,
+            scan_latest,
+            scan_cap,
+            scan_layers,
+            radar_cap,
+            radar_latest
+        )
+        updateAgentlessConfig([updated_hub_account], compute_api_endpoint)
+
         set_as_hub = "false"
         subnet_name = ""
         security_group_name = ""
