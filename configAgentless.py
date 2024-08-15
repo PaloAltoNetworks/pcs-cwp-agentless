@@ -5,6 +5,8 @@ import argparse
 import os
 import sys
 
+from time import sleep
+
 if os.path.exists(".env"):
     from dotenv import load_dotenv
     load_dotenv()
@@ -23,11 +25,19 @@ SUBNET_NAME = os.getenv("SUBNET_NAME", "")
 SECURITY_GROUP_NAME = os.getenv("SECURITY_GROUP_NAME", "")
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID", "")
 ORGANIZATION_TYPE = os.getenv("ORGANIZATION_TYPE", "")
+ACCOUNT_GROUPS = os.getenv("ACCOUNT_GROUPS", "").split(",")
+ONBOARDING_MODE = os.getenv("ONBOARDING_MODE", "org")
 HUB_ACCOUNT_ID = os.getenv("HUB_ACCOUNT_ID", "")
 LIMIT = int(os.getenv("LIMIT", "50"))
+SLEEP = int(os.getenv("SLEEP", "5"))
 BULK_UPDATE_COUNT = int(os.getenv("BULK_UPDATE_COUNT", "20"))
 
+if '' in ACCOUNT_GROUPS: ACCOUNT_GROUPS.remove('')
+
 http = urllib3.PoolManager()
+
+class RequestError(Exception):
+    pass
 
 def http_request(api_endpoint, path, body={}, method="POST"):
     global headers
@@ -40,7 +50,6 @@ def http_request(api_endpoint, path, body={}, method="POST"):
         return response.data
     
     if response.status == 401 and path not in ("/login", "/api/v1/authenticate"):
-        print("Hello")
         token_body = {
             "username": PRISMA_USERNAME,
             "password": PRISMA_PASSWORD
@@ -55,14 +64,18 @@ def http_request(api_endpoint, path, body={}, method="POST"):
             
         return http_request(api_endpoint, path, body, method)
     
-    print(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
-    sys.exit(2)
+    if response.status == 429:
+        sleep(SLEEP)
+        return http_request(api_endpoint, path, body, method)
+
+    raise RequestError(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
+    
 
 def getCloudAccountsList(api_endpoint, limit=50, provider=""):
     offset = 0
     accounts = []
     response = "first_response"
-    base_path = f"/api/v1/cloud-scan-rules?agentlessScanEnabled=true&limit={limit}"
+    base_path = f"/api/v1/cloud-scan-rules?agentlessGeneralScanStatus=on,new,cleanup,scanning&limit={limit}"
 
     while response:
         path = f"{base_path}&offset={offset}"
@@ -74,8 +87,8 @@ def getCloudAccountsList(api_endpoint, limit=50, provider=""):
             accounts += response
             offset += limit
 
-
     return accounts
+
 
 def updateAgentlessConfig(data, api_endpoint, bulk_update_count=20):
     accounts_count = len(data)
@@ -110,6 +123,142 @@ def format_tags(tags_list, list_name=""):
     
     return tags_formatted
 
+def update_account_config(
+        account, 
+        subnet_name, 
+        security_group_name, 
+        auto_scale, regions, 
+        include_tags, 
+        exclude_tags,
+        custom_tags,
+        scan_non_running,
+        scanners,
+        enforce_permissions_check,
+        set_as_hub,
+        hub_account_id,
+        oci_vcn, 
+        oci_excluded_compartments,
+        scan_latest,
+        scan_cap,
+        scan_layers,
+        radar_cap,
+        radar_latest
+    ):
+    account_id = account["credential"]["cloudProviderAccountID"]
+    cloud_type = account["credential"]["type"]
+    del account["modified"]
+    del account["credential"]
+
+    # Agentless Parameters
+    if cloud_type == "oci":
+        if not subnet_name or subnet_name.lower() == "none":
+            if oci_vcn and oci_vcn.lower() != "none":
+                print("VCN cannot appear without subnet. Subnet Name is required")
+                print(f"Skipping account ID: {account_id}...")
+                return 0
+            
+            if security_group_name and security_group_name.lower() != "none":
+                if not oci_vcn or oci_vcn.lower() == "none":
+                    print("Security group cannot appear without VCN. VCN Name is required")
+
+                print("Security group cannot appear without subnet. Subnet Name is required")
+                print(f"Skipping account ID: {account_id}...")
+                return 0
+        
+        else:
+            if not oci_vcn or oci_vcn.lower() == "none":
+                print("Subnet cannot appear without VCN. VCN Name is required")
+                print(f"Skipping account ID: {account_id}...")
+                return 0
+
+    if security_group_name: 
+        if cloud_type in ("aws", "azure", "oci"):
+            if security_group_name.lower() == "none":
+                account["agentlessScanSpec"]["securityGroup"] = ""
+            else:         
+                account["agentlessScanSpec"]["securityGroup"] = security_group_name
+        else:
+            print(f"{account_id} is not an AWS, Azure or OCI account. Skipped Security Group config")
+
+    if subnet_name: 
+        if subnet_name.lower() == "none":
+            account["agentlessScanSpec"]["subnet"] = ""
+        else:
+            account["agentlessScanSpec"]["subnet"] = subnet_name
+    
+    if auto_scale: account["agentlessScanSpec"]["autoScale"] = auto_scale.lower() == "true"
+
+    if regions: 
+        if regions[0].lower() == "none":
+            account["agentlessScanSpec"]["regions"] = []
+        else:
+            account["agentlessScanSpec"]["regions"] = regions
+
+    if oci_excluded_compartments:
+        if cloud_type == "oci":
+            if oci_excluded_compartments[0].lower() == "none":
+                account["agentlessScanSpec"]["ociExcludedCompartments"] = []
+            else:
+                account["agentlessScanSpec"]["ociExcludedCompartments"] = oci_excluded_compartments
+        else:
+            print(f"{account_id} is not an OCI account. Skipped Excluded Compartments")
+
+    if oci_vcn: 
+        if cloud_type == "oci":
+            if oci_vcn.lower() == "none":
+                account["agentlessScanSpec"]["ociVcn"] = ""
+            else:
+                account["agentlessScanSpec"]["ociVcn"] = oci_vcn
+        else:
+            print(f"{account_id} is not an OCI account. Skipped VCN name setup")
+
+    if include_tags: 
+        if include_tags == ["none"]:
+            account["agentlessScanSpec"]["includedTags"] = []
+        else:
+            account["agentlessScanSpec"]["includedTags"] = include_tags
+            
+        if "excludedTags" in account["agentlessScanSpec"]:
+            del account["agentlessScanSpec"]["excludedTags"]
+
+    if exclude_tags: 
+        if exclude_tags == ["none"]:
+            account["agentlessScanSpec"]["excludedTags"] = []
+        else:
+            account["agentlessScanSpec"]["excludedTags"] = exclude_tags
+
+        if "includedTags" in account["agentlessScanSpec"]:
+            del account["agentlessScanSpec"]["includedTags"]
+
+    if custom_tags: 
+        if custom_tags == ["none"]:
+            account["agentlessScanSpec"]["customTags"] = []
+        else:
+            account["agentlessScanSpec"]["customTags"] = custom_tags
+    
+    if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
+    if scanners: account["agentlessScanSpec"]["scanners"] = scanners
+    if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
+    if set_as_hub: account["agentlessScanSpec"]["hubAccount"] = set_as_hub == "true"
+
+    if hub_account_id:
+        account["agentlessScanSpec"]["hubAccount"] = False
+        account["agentlessScanSpec"]["hubCredentialID"] = hub_account_id
+        account["agentlessScanSpec"]["scanners"] = 0
+        account["agentlessScanSpec"]["autoScale"] = False
+        account["agentlessScanSpec"]["skipPermissionsCheck"] = True
+
+    # Severless Parameters
+    if scan_latest: account["serverlessScanSpec"]["scanAllVersions"] = scan_latest == "false"
+    if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
+
+    if cloud_type == "aws":
+        if scan_layers: account["serverlessScanSpec"]["scanLayers"] = scan_layers == "true"
+        if radar_cap: account["serverlessRadarCap"] = radar_cap
+        if radar_latest: account["discoverAllFunctionVersions"] = radar_latest == "false"
+    
+    return account
+
 
 if __name__ == "__main__":
     # Agentless Parameters
@@ -135,7 +284,8 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oci-vcn", type=str, help="(OCI Only) scan VCN name")
     parser.add_argument("-l", "--limit", type=int, default=LIMIT, help="Set the limit of accounts to be retrieved while getting the accounts information")
     parser.add_argument("-B", "--bulk-update-count", type=int, default=BULK_UPDATE_COUNT, help="Set the amount of accounts to be updated at once")
-    parser.add_argument("--set-as-hub", action="store_true", help="Set the account as Hub")
+    parser.add_argument("--set-as-hub", type=str, choices=["true", "false"], help="Set the account as Hub")
+    parser.add_argument("--agentless-state", type=str, choices=["enabled", "disabled"], help="Enables or Disables Agentless Scanning from CSPM Console")
     
     # Serverless Arguments
     parser.add_argument("--scan-latest", type=str, choices=["true", "false"], help="if is set to true, it will scan only the latest version of serverless functions")
@@ -143,6 +293,13 @@ if __name__ == "__main__":
     parser.add_argument("--scan-layers", type=str, choices=["true", "false"], help="if is set to true, it will scan the lambda functions layers. Only applicable for AWS cloud accounts")
     parser.add_argument("--radar-cap", type=int, help="The amount of functions to be graphed in the Radar view. Minimum is 1")
     parser.add_argument("--radar-latest", type=str, choices=["true", "false"], help="If set to true, it show the radar view of only the latest version of the functions")
+    parser.add_argument("--serverless-state", type=str, choices=["enabled", "disabled"], help="Enables or Disables Serverless Scanning from CSPM Console")
+
+    # General Values
+    parser.add_argument("--change-state-only", action='store_true', help="Only updates the state of Serverles or Agentless scanning")
+    parser.add_argument("--onboarding-mode", type=str, choices=["org", "single"], default=ONBOARDING_MODE, help="Is the way the accounts were onboarded. Can be 'org' or 'single' for organization level or single account level respectively")
+    parser.add_argument("--account-groups", nargs='+', default=ACCOUNT_GROUPS, help="Set the account groups to be used to retrieve the account IDs")
+
 
     args = parser.parse_args()
 
@@ -170,6 +327,7 @@ if __name__ == "__main__":
     limit = args.limit
     bulk_update_count = args.bulk_update_count
     set_as_hub = args.set_as_hub
+    agentless_state = args.agentless_state
 
     # Serverless arguments
     scan_latest = args.scan_latest
@@ -177,12 +335,18 @@ if __name__ == "__main__":
     scan_layers = args.scan_layers
     radar_cap = args.radar_cap
     radar_latest = args.radar_latest
+    serverless_state = args.serverless_state
+
+    # General values
+    change_state_only = args.change_state_only
+    onboarding_mode = args.onboarding_mode
+    account_groups = args.account_groups
 
     if exclude_tags and include_tags:
         parser.error("--include-tags and --exclude-tags cannot be used at the same time.")
 
-    if not account_ids and not organization_id:
-        parser.error("There's not either --account-ids or --organization-id parameters.")
+    if not account_ids and not organization_id and not account_groups:
+        parser.error("There's not either --account-ids, --organization-id or --account-groups parameters.")
     
     if not organization_id and not organization_type:   
         parser.error("--organization-id and --organization-type are dependant.")
@@ -216,12 +380,56 @@ if __name__ == "__main__":
             # Get Compute API endpoint
             compute_api_endpoint = json.loads(http_request(prisma_api_endpoint, "/meta_info", method="GET"))["twistlockUrl"]
 
-        if organization_id:
+        if onboarding_mode == "org":
+            if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH")
+            if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH")
+
+            if agentless_state or serverless_state:
+                print(f"Changed the state of Org {organization_id}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+                if change_state_only:
+                    print("Only required to change state")
+                    sys.exit(0)
+
+
+        if account_groups:
+            prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET"))
+            account_group_ids = []
+            account_ids = []
+            for prisma_account_group in prisma_account_groups:
+                if prisma_account_group["name"] in account_groups:
+                    account_group_ids.append(prisma_account_group["id"])
+
+            accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/name?onlyActive=true&accountGroupIds={','.join(account_group_ids)}&cloudType={organization_type}", method="GET"))
+            for account_info in accounts_info:
+                if account_info["id"] != hub_account_id and ":" not in account_info["id"]:
+                    account_ids.append(account_info["id"])
+
+                    if onboarding_mode == "single":
+                        try:
+                            if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH")
+                            if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH")
+                        except RequestError as err:
+                            print(err)
+                            print(f"Removing account {account_info['id']} from Account Ids")
+                            account_ids.remove(account_info['id'])
+
+
+            if (agentless_state or serverless_state) and onboarding_mode == "single":
+                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+                if change_state_only:
+                    print("Only required to change state")
+                    sys.exit(0)
+
+            print(f"Total Accounts in the Account Groups {', '.join(account_groups)}: {len(account_ids)}")
+
+        elif organization_id:
             account_ids = []
             accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/{organization_type}/{organization_id}/project?excludeAccountGroupDetails=true", method="GET"))
             for account_info in accounts_info:
                 if account_info["accountId"] != hub_account_id:
                     account_ids.append(account_info["accountId"])
+
+            print(f"Total Accounts in the Org {organization_id}: {len(account_ids)}")
         
         del headers["X-Redlock-Auth"]
 
@@ -229,129 +437,70 @@ if __name__ == "__main__":
     compute_token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body))["token"]
     headers["Authorization"] = f"Bearer {compute_token}"
 
+    # Updating Hub Account
+    print(f"Updating Hub Account: {hub_account_id}")
+    hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET"))[0]
+    updated_hub_account = update_account_config(
+        hub_account, 
+        subnet_name, 
+        security_group_name, 
+        auto_scale, regions, 
+        include_tags, 
+        exclude_tags,
+        custom_tags,
+        scan_non_running,
+        scanners,
+        enforce_permissions_check,
+        "true",
+        "",
+        oci_vcn, 
+        oci_excluded_compartments,
+        scan_latest,
+        scan_cap,
+        scan_layers,
+        radar_cap,
+        radar_latest
+    )
+
+    updateAgentlessConfig([updated_hub_account], compute_api_endpoint)
+
     accounts = getCloudAccountsList(compute_api_endpoint, limit, organization_type)
     data = []
-    accounts_updated = []
 
+    if hub_account_id:
+        set_as_hub = "false"
+        subnet_name = ""
+        security_group_name = ""
 
     for account in accounts:
-        if account["credential"]["cloudProviderAccountID"] in account_ids:
-            account_id = account["credential"]["cloudProviderAccountID"]
-            cloud_type = account["credential"]["type"]
-            del account["modified"]
-            del account["credential"]
+        account_id = account["credential"]["cloudProviderAccountID"]
+        if account_id in account_ids:
+            updated_account = update_account_config(
+                account, 
+                subnet_name, 
+                security_group_name, 
+                auto_scale, regions, 
+                include_tags, 
+                exclude_tags,
+                custom_tags,
+                scan_non_running,
+                scanners,
+                enforce_permissions_check,
+                set_as_hub,
+                hub_account_id,
+                oci_vcn, 
+                oci_excluded_compartments,
+                scan_latest,
+                scan_cap,
+                scan_layers,
+                radar_cap,
+                radar_latest
+            )
 
-            # Agentless Parameters
-            if cloud_type == "oci":
-                if not subnet_name or subnet_name.lower() == "none":
-                    if oci_vcn and oci_vcn.lower() != "none":
-                        print("VCN cannot appear without subnet. Subnet Name is required")
-                        print(f"Skipping account ID: {account_id}...")
-                        continue
-                    
-                    if security_group_name and security_group_name.lower() != "none":
-                        if not oci_vcn or oci_vcn.lower() == "none":
-                            print("Security group cannot appear without VCN. VCN Name is required")
+            if updated_account:
+                data.append(updated_account)
 
-                        print("Security group cannot appear without subnet. Subnet Name is required")
-                        print(f"Skipping account ID: {account_id}...")
-                        continue
-                
-                else:
-                    if not oci_vcn or oci_vcn.lower() == "none":
-                        print("Subnet cannot appear without VCN. VCN Name is required")
-                        print(f"Skipping account ID: {account_id}...")
-                        continue
-
-
-            if security_group_name: 
-                if cloud_type in ("aws", "azure", "oci"):
-                    if security_group_name.lower() == "none":
-                        account["agentlessScanSpec"]["securityGroup"] = ""
-                    else:         
-                        account["agentlessScanSpec"]["securityGroup"] = security_group_name
-                else:
-                    print(f"{account_id} is not an AWS, Azure or OCI account. Skipped Security Group config")
-
-            if subnet_name: 
-                if subnet_name.lower() == "none":
-                    account["agentlessScanSpec"]["subnet"] = ""
-                else:
-                    account["agentlessScanSpec"]["subnet"] = subnet_name
-            
-            if auto_scale: account["agentlessScanSpec"]["autoScale"] = auto_scale.lower() == "true"
-
-            if regions: 
-                if regions[0].lower() == "none":
-                    account["agentlessScanSpec"]["regions"] = []
-                else:
-                    account["agentlessScanSpec"]["regions"] = regions
-
-            if oci_excluded_compartments:
-                if cloud_type == "oci":
-                    if oci_excluded_compartments[0].lower() == "none":
-                        account["agentlessScanSpec"]["ociExcludedCompartments"] = []
-                    else:
-                        account["agentlessScanSpec"]["ociExcludedCompartments"] = oci_excluded_compartments
-                else:
-                    print(f"{account_id} is not an OCI account. Skipped Excluded Compartments")
-
-            if oci_vcn: 
-                if cloud_type == "oci":
-                    if oci_vcn.lower() == "none":
-                        account["agentlessScanSpec"]["ociVcn"] = ""
-                    else:
-                        account["agentlessScanSpec"]["ociVcn"] = oci_vcn
-                else:
-                    print(f"{account_id} is not an OCI account. Skipped VCN name setup")
-
-            if include_tags: 
-                if include_tags == ["none"]:
-                    account["agentlessScanSpec"]["includedTags"] = []
-                else:
-                    account["agentlessScanSpec"]["includedTags"] = include_tags
-                    
-                if "excludedTags" in account["agentlessScanSpec"]:
-                    del account["agentlessScanSpec"]["excludedTags"]
-
-            if exclude_tags: 
-                if exclude_tags == ["none"]:
-                    account["agentlessScanSpec"]["excludedTags"] = []
-                else:
-                    account["agentlessScanSpec"]["excludedTags"] = exclude_tags
-
-                if "includedTags" in account["agentlessScanSpec"]:
-                    del account["agentlessScanSpec"]["includedTags"]
-
-            if custom_tags: 
-                if custom_tags == ["none"]:
-                    account["agentlessScanSpec"]["customTags"] = []
-                else:
-                    account["agentlessScanSpec"]["customTags"] = custom_tags
-            
-            if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
-            if scanners: account["agentlessScanSpec"]["scanners"] = scanners
-            if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
-            account["agentlessScanSpec"]["hubAccount"] = set_as_hub
-
-            if hub_account_id:
-                account["agentlessScanSpec"]["hubAccount"] = False
-                account["agentlessScanSpec"]["hubCredentialID"] = hub_account_id
-                account["agentlessScanSpec"]["scanners"] = 0
-                account["agentlessScanSpec"]["autoScale"] = False
-                account["agentlessScanSpec"]["skipPermissionsCheck"] = True
-
-            # Severless Parameters
-            if scan_latest: account["serverlessScanSpec"]["scanAllVersions"] = scan_latest == "false"
-            if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
-
-            if cloud_type == "aws":
-                if scan_layers: account["serverlessScanSpec"]["scanLayers"] = scan_layers == "true"
-                if radar_cap: account["serverlessRadarCap"] = radar_cap
-                if radar_latest: account["discoverAllFunctionVersions"] = radar_latest == "false"
-
-            data.append(account)
-            accounts_updated.append(account_id)
             account_ids.remove(account_id)
 
     updateAgentlessConfig(data, compute_api_endpoint)
+    print(f"Total Accounts Modified: {len(data)}")
