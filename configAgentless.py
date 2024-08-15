@@ -299,7 +299,7 @@ if __name__ == "__main__":
     parser.add_argument("--change-state-only", action='store_true', help="Only updates the state of Serverles or Agentless scanning")
     parser.add_argument("--onboarding-mode", type=str, choices=["org", "single"], default=ONBOARDING_MODE, help="Is the way the accounts were onboarded. Can be 'org' or 'single' for organization level or single account level respectively")
     parser.add_argument("--account-groups", nargs='+', default=ACCOUNT_GROUPS, help="Set the account groups to be used to retrieve the account IDs")
-
+    parser.add_argument("--output",  type=str, help="Outputs the accounts details to a file")
 
     args = parser.parse_args()
 
@@ -341,6 +341,9 @@ if __name__ == "__main__":
     change_state_only = args.change_state_only
     onboarding_mode = args.onboarding_mode
     account_groups = args.account_groups
+    output_file = args.output
+
+    output = {}
 
     if exclude_tags and include_tags:
         parser.error("--include-tags and --exclude-tags cannot be used at the same time.")
@@ -386,8 +389,22 @@ if __name__ == "__main__":
 
             if agentless_state or serverless_state:
                 print(f"Changed the state of Org {organization_id}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+
+                if output_file:
+                    output = {
+                        "changed_state": {
+                            "providers": [organization_id],
+                            "compute-agentless": {"state": agentless_state},
+                            "compute-serverless-scan": {"state": serverless_state}
+                        }
+                    }
+
                 if change_state_only:
                     print("Only required to change state")
+                    if output_file:
+                        with open(output_file, "w") as f:
+                            f.write(json.dumps(output))
+                            f.close()
                     sys.exit(0)
 
 
@@ -416,8 +433,21 @@ if __name__ == "__main__":
 
             if (agentless_state or serverless_state) and onboarding_mode == "single":
                 print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+                if output_file:
+                    output = {
+                        "changed_state": {
+                            "providers": account_ids,
+                            "compute-agentless": {"state": agentless_state},
+                            "compute-serverless-scan": {"state": serverless_state}
+                        }
+                    }
+                
                 if change_state_only:
                     print("Only required to change state")
+                    if output_file:
+                        with open(output_file, "w") as f:
+                            f.write(json.dumps(output))
+                            f.close()
                     sys.exit(0)
 
             print(f"Total Accounts in the Account Groups {', '.join(account_groups)}: {len(account_ids)}")
@@ -467,6 +497,9 @@ if __name__ == "__main__":
         )
         updateAgentlessConfig([updated_hub_account], compute_api_endpoint)
 
+        if output_file:
+            output["hubAccountConfig"] = updated_hub_account
+
         set_as_hub = "false"
         subnet_name = ""
         security_group_name = ""
@@ -503,3 +536,9 @@ if __name__ == "__main__":
 
     updateAgentlessConfig(data, compute_api_endpoint)
     print(f"Total Accounts Modified: {len(data)}")
+
+    if output_file:
+        output["AccountsConfig"] = data
+        with open(output_file, "w") as f:
+            f.write(json.dumps(output))
+            f.close()
