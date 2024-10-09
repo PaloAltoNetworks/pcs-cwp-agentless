@@ -163,3 +163,4 @@ cython_debug/
 results.json
 backup/
 Azure/
+output.txt

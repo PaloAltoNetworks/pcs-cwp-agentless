@@ -1,2 +1,2 @@
-python-dotenv==1.0.0
-urllib3==1.26.18
+python-dotenv>=1.0.0
+urllib3>=1.26.18
