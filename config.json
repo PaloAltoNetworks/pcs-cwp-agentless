@@ -1,0 +1,48 @@
+{
+    "changeStateOnly": false,
+    "findInOrg": false,
+    "debug": true,
+    "backup": "",
+    "limit": 50,
+    "bulkUpdateCount": 20,
+    "accountSets": [
+        {
+            "organizationId": "",
+            "organizationType": "",
+            "accountGroups": [],
+            "accountIds": [],
+            "onboardingMode":"org",
+            "scanMode": "",
+            "agentless": {
+                "hubAccountId": "",
+                "subnetName": "",
+                "securityGroupName": "",
+                "excludeTags": [
+                    {
+                        "key": "",
+                        "value": ""
+                    }
+                ],
+                "includeTags": [],
+                "customTags": [],
+                "regions": [],
+                "scanners": 0,
+                "scanNonRunning": "false",
+                "autoScale": "true",
+                "enforcePermissionsCheck": "true",
+                "ociExcludedCompartments": [],
+                "ociVcn": "",
+                "setAsHub": "",
+                "agentlessState": ""
+            },
+            "serverless": {
+                "scanLatest": "true",
+                "scanCap": "0",
+                "scanLayers": "true",
+                "radarCap": 0,
+                "radarLatest": "true",
+                "serverlessState": ""
+            }            
+        }
+    ]
+}

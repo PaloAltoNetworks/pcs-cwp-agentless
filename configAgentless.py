@@ -17,10 +17,15 @@ parser = argparse.ArgumentParser(
     epilog='For further documentation go to: https://github.com/PaloAltoNetworks/pcs-cwp-agentless'
 )
 
-PRISMA_API_ENDPOINT = os.getenv("PRISMA_API_ENDPOINT", "https://api.prismacloud.io")
-COMPUTE_API_ENDPOINT = os.getenv("COMPUTE_API_ENDPOINT", "")
-PRISMA_USERNAME = os.getenv("PRISMA_USERNAME", "")
-PRISMA_PASSWORD = os.getenv("PRISMA_PASSWORD", "")
+prisma_api_endpoint = os.getenv("PRISMA_API_ENDPOINT", "https://api.prismacloud.io")
+compute_api_endpoint = os.getenv("COMPUTE_API_ENDPOINT", "")
+username = os.getenv("PRISMA_USERNAME", "")
+password = os.getenv("PRISMA_PASSWORD", "")
+
+headers = {
+    "Content-Type": "application/json"
+}
+
 SUBNET_NAME = os.getenv("SUBNET_NAME", "")
 SECURITY_GROUP_NAME = os.getenv("SECURITY_GROUP_NAME", "")
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID", "")
@@ -41,11 +46,13 @@ http = urllib3.PoolManager()
 class RequestError(Exception):
     pass
 
-def http_request(api_endpoint, path, body={}, method="POST", skip_error=False):
-    global headers
+def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, debug=DEBUG):
     global prisma_api_endpoint
     global compute_api_endpoint
-    if debug: print(f"Making the following request:\n    Path: {path}\n    Method: {method}\n")
+    global headers
+    global username
+    global password
+    if debug: print(f"Making the following request:\n    URL: {api_endpoint}\n    Path: {path}\n    Method: {method}\n")
 
     response = http.request(method, f"{api_endpoint}{path}", headers=headers, body=json.dumps(body))
 
@@ -54,22 +61,23 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False):
     
     if response.status == 401 and path not in ("/login", "/api/v1/authenticate"):
         token_body = {
-            "username": PRISMA_USERNAME,
-            "password": PRISMA_PASSWORD
+            "username": username,
+            "password": password
         }
+
         if api_endpoint == prisma_api_endpoint:
-            token = json.loads(http_request(prisma_api_endpoint, "/login", token_body))["token"]
+            token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
             headers["X-Redlock-Auth"] = token
 
         if api_endpoint == compute_api_endpoint:
-            token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body))["token"]
+            token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body, debug=debug))["token"]
             headers["Authorization"] = f"Bearer {token}"
             
-        return http_request(api_endpoint, path, body, method)
+        return http_request(api_endpoint, path, body, method, debug)
     
     if response.status == 429:
         sleep(SLEEP)
-        return http_request(api_endpoint, path, body, method)
+        return http_request(api_endpoint, path, body, method, debug)
 
     if not skip_error:
         raise RequestError(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
@@ -77,7 +85,8 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False):
     if debug: print(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
     return "{}"
 
-def getCloudAccountsList(api_endpoint, limit=50, provider="", scan_mode=""):
+
+def getCloudAccountsList(api_endpoint, limit=50, provider="", scan_mode="", debug=DEBUG):
     offset = 0
     accounts = []
     response = "first_response"
@@ -87,7 +96,7 @@ def getCloudAccountsList(api_endpoint, limit=50, provider="", scan_mode=""):
 
     while response:
         path = f"{base_path}&offset={offset}" 
-        response = json.loads(http_request(api_endpoint, path, method="GET"))
+        response = json.loads(http_request(api_endpoint, path, method="GET", debug=debug))
         if response:
             accounts += response
             offset += limit
@@ -97,17 +106,17 @@ def getCloudAccountsList(api_endpoint, limit=50, provider="", scan_mode=""):
     return accounts
 
 
-def updateAgentlessConfig(data, api_endpoint, bulk_update_count=20):
+def updateAgentlessConfig(data, api_endpoint, bulk_update_count=20, debug=DEBUG):
     accounts_count = len(data)
 
     for i in range(0, accounts_count, bulk_update_count):
         if i + bulk_update_count < accounts_count:
-            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:i+bulk_update_count], method="PUT")
+            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:i+bulk_update_count], method="PUT", debug=debug)
         else:
-            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:], method="PUT")
+            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:], method="PUT", debug=debug)
 
 
-def format_tags(tags_list, list_name=""):
+def formatTags(tags_list, list_name=""):
     tags_formatted = []
     if tags_list == ["none"]:
         return tags_list
@@ -130,7 +139,7 @@ def format_tags(tags_list, list_name=""):
     
     return tags_formatted
 
-def update_account_config(
+def updateAccountConfig(
         account, 
         subnet_name, 
         security_group_name, 
@@ -151,10 +160,15 @@ def update_account_config(
         radar_cap,
         radar_latest
     ):
+    global compute_api_endpoint
+
     account_id = account["credential"]["cloudProviderAccountID"]
     cloud_type = account["credential"]["type"]
     del account["modified"]
     del account["credential"]
+
+    # Check if console address exists
+    if not account["agentlessScanSpec"]["consoleAddr"]: account["agentlessScanSpec"]["consoleAddr"] = compute_api_endpoint
 
     # Agentless Parameters
     if cloud_type == "oci":
@@ -246,7 +260,11 @@ def update_account_config(
     if scan_non_running: account["agentlessScanSpec"]["scanNonRunning"] = scan_non_running.lower() == "true"
     if scanners: account["agentlessScanSpec"]["scanners"] = scanners
     if enforce_permissions_check: account["agentlessScanSpec"]["skipPermissionsCheck"] = enforce_permissions_check.lower() == "false"
-    if set_as_hub: account["agentlessScanSpec"]["hubAccount"] = set_as_hub == "true"
+    
+
+    if set_as_hub: 
+        account["agentlessScanSpec"]["hubAccount"] = set_as_hub == "true"
+        account["agentlessScanSpec"]["hubCredentialID"] = ""
 
     if hub_account_id:
         account["agentlessScanSpec"]["hubAccount"] = False
@@ -267,15 +285,252 @@ def update_account_config(
     return account
 
 
+def configAgentless(
+    organization_id = ORGANIZATION_ID,
+    organization_type = ORGANIZATION_TYPE,
+    account_ids = [],
+    change_state_only = False,
+    onboarding_mode = ONBOARDING_MODE,
+    account_groups = ACCOUNT_GROUPS,
+    scan_mode = "",
+    debug = DEBUG,
+    find_in_org = False,
+    backup = "",
+    hub_account_id = HUB_ACCOUNT_ID,
+    subnet_name = SUBNET_NAME,
+    security_group_name = SECURITY_GROUP_NAME,
+    exclude_tags = [],
+    include_tags = [],
+    custom_tags = [],
+    scan_non_running = "",
+    scanners = 1,
+    regions = [],
+    oci_excluded_compartments = [],
+    oci_vcn = "",
+    auto_scale = "",
+    enforce_permissions_check = "",
+    limit = LIMIT,
+    bulk_update_count = BULK_UPDATE_COUNT,
+    set_as_hub = "false",
+    agentless_state = "",
+    scan_latest = "",
+    scan_cap = "",
+    scan_layers = "",
+    radar_cap = 0,
+    radar_latest = "",
+    serverless_state = ""
+):
+    global prisma_api_endpoint
+    global compute_api_endpoint
+    global headers
+    global username
+    global password
+    
+    token_body = {
+        "username": username,
+        "password": password
+    }
+
+    if hub_account_id and account_ids:   
+        if hub_account_id in account_ids:
+            account_ids.remove(hub_account_id)
+
+    if not prisma_api_endpoint:
+        if not compute_api_endpoint:   
+            print("If PRISMA_API_ENDPOINT is not set, then COMPUTE_API_ENDPOINT is required.")
+            sys.exit(1)
+        else:
+            # Retrieve Compute Console token
+            compute_token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body, debug=debug))["token"]
+            headers["Authorization"] = f"Bearer {compute_token}"
+
+    else:
+        # Retrieve Prisma Cloud token
+        prisma_token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
+        headers["X-Redlock-Auth"] = prisma_token
+        
+        if not compute_api_endpoint:
+            # Get Compute API endpoint
+            compute_api_endpoint = json.loads(http_request(prisma_api_endpoint, "/meta_info", method="GET", debug=debug))["twistlockUrl"]
+
+        if onboarding_mode == "org":
+            if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH", debug=debug)
+            if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH", debug=debug)
+
+            if agentless_state or serverless_state:
+                print(f"Changed the state of Org {organization_id}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+
+                if change_state_only:
+                    print("Only required to change state")
+                    sys.exit(0)
+
+        if account_groups:
+            prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
+            account_group_ids = []
+            account_ids = []
+
+            for prisma_account_group in prisma_account_groups:
+                if prisma_account_group["name"] in account_groups:
+                    account_group_ids.append(prisma_account_group["id"])
+
+            if debug: print(f"Account groups detected: {' '.join(account_group_ids)}\n")
+
+            accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/name?onlyActive=true&accountGroupIds={','.join(account_group_ids)}&cloudType={organization_type}", method="GET", debug=debug))
+            backup_data = []
+            if backup:
+                with open(backup) as backup_file:
+                    backup_data = backup_file.read().split("\n")
+
+            for account_info in accounts_info:
+                if account_info["id"] != hub_account_id and ":" not in account_info["id"]:
+                    account_ids.append(account_info["id"])
+
+                    if onboarding_mode == "single":
+                        try:
+                            if account_info["id"] not in backup_data:
+                                if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH", debug=debug)
+                                if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH", debug=debug)
+                                if debug: print(f"Account modified: {account_info['id']}. Agentless state: {agentless_state}. Serverless state: {serverless_state}")
+                                if backup:
+                                    with open(backup, "a") as backup_file:
+                                        backup_file.write(f"{account_info['id']}\n")
+
+                        except RequestError as err:
+                            print(err)
+                            print(f"Removing account {account_info['id']} from Account Ids")
+                            account_ids.remove(account_info['id'])
+
+
+            if (agentless_state or serverless_state) and onboarding_mode == "single":
+                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}", debug=debug)
+                
+                if change_state_only:
+                    print("Only required to change state")
+                    sys.exit(0)
+
+            print(f"Total Accounts in the Account Groups {', '.join(account_groups)}: {len(account_ids)}")
+            if debug: print(f"Accounts: {', '.join(account_ids)}")
+
+        elif organization_id:
+            accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/{organization_type}/{organization_id}/project?excludeAccountGroupDetails=true", method="GET", debug=debug))
+            for account_info in accounts_info:
+                if account_info["accountId"] != hub_account_id:
+                    account_ids.append(account_info["accountId"])
+
+            print(f"Total Accounts in the Org {organization_id}: {len(account_ids)}")
+            if debug: print(f"Accounts: {', '.join(account_ids)} \n")
+
+    compute_accounts = getCloudAccountsList(compute_api_endpoint, limit, organization_type, scan_mode, debug=debug)
+    data = []
+
+    if hub_account_id:
+        # Updating Hub Account
+        print(f"Updating Hub Account: {hub_account_id}")
+        hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET", debug=debug))[0]
+        updated_hub_account = updateAccountConfig(
+            hub_account, 
+            subnet_name, 
+            security_group_name, 
+            auto_scale, 
+            regions, 
+            ["none"], 
+            ["none"],
+            custom_tags,
+            "false",
+            scanners,
+            enforce_permissions_check,
+            "true",
+            "",
+            oci_vcn, 
+            oci_excluded_compartments,
+            scan_latest,
+            scan_cap,
+            scan_layers,
+            radar_cap,
+            radar_latest
+        )
+        if debug: print(f"Hub Account {hub_account_id} configuration: {updated_hub_account}\n")
+
+        updateAgentlessConfig([updated_hub_account], compute_api_endpoint, bulk_update_count, debug=debug)
+
+        set_as_hub = "false"
+        subnet_name = ""
+        security_group_name = ""
+
+    for account in compute_accounts:
+        account_id = account["credential"]["cloudProviderAccountID"]
+        found_in_org = False
+        found_in_accounts = account_id in account_ids
+        parent_account_id = ""
+
+        # Find the account if its located inside the organization
+        if find_in_org and onboarding_mode == "org" and organization_id:
+            if found_in_accounts:
+                if debug: print(f"Account {account_id} is already in scope\n")
+            
+            elif account_id == hub_account_id:
+                if debug: print(f"Account {account_id} is Hub Account\n")
+
+            else:
+                response = json.loads(http_request(prisma_api_endpoint, f"/cloud/{organization_type}/{account_id}", method="GET", skip_error=True, debug=debug))
+                if response:
+                    if "parentAccountId" in response:
+                        parent_account_id = response["parentAccountId"]
+                    elif "cloudAccount" in response:
+                        if "parentAccountId" in response["cloudAccount"]:
+                            parent_account_id = response["cloudAccount"]["parentAccountId"]
+
+                    found_in_org = parent_account_id == organization_id
+                    if found_in_org and debug: print(f"Account {account_id} found in organization {organization_id}")
+                    
+
+        if found_in_accounts or found_in_org:
+            updated_account = updateAccountConfig(
+                account, 
+                subnet_name, 
+                security_group_name, 
+                auto_scale,
+                regions, 
+                include_tags, 
+                exclude_tags,
+                custom_tags,
+                scan_non_running,
+                scanners,
+                enforce_permissions_check,
+                set_as_hub,
+                hub_account_id,
+                oci_vcn, 
+                oci_excluded_compartments,
+                scan_latest,
+                scan_cap,
+                scan_layers,
+                radar_cap,
+                radar_latest
+            )
+
+            if updated_account:
+                data.append(updated_account)
+
+            if not found_in_org:
+                account_ids.remove(account_id)
+        
+            if debug: print(f"Target Account {account_id} configuration: {updated_account}\n")
+
+    updateAgentlessConfig(data, compute_api_endpoint, bulk_update_count, debug=debug)
+    print(f"Total Target Accounts Modified: {len(data)}")
+
+
+    
+
 if __name__ == "__main__":
 
     # General Parameters
     parser.add_argument("-G", "--organization-id", type=str, default=ORGANIZATION_ID, help="Organization ID where the agentless configuration shall be applied to all member accounts")
     parser.add_argument("-T", "--organization-type", type=str, default=ORGANIZATION_TYPE, choices=["aws", "gcp", "azure"], help="Organization type of the Organization ID. Can be: aws, gcp or azure")
-    parser.add_argument("-u", "--username", type=str, default=PRISMA_USERNAME, help="Prisma Cloud Access Key Id")
-    parser.add_argument("-p", "--password", type=str, default=PRISMA_PASSWORD, help="Prisma Cloud Secret Key")
-    parser.add_argument("-P", "--prisma-api-endpoint", type=str, default=PRISMA_API_ENDPOINT, help="Prisma Cloud API Endpoint")
-    parser.add_argument("-e", "--compute-api-endpoint", type=str, default=COMPUTE_API_ENDPOINT, help="Prisma Cloud Compute API Endpoint")
+    parser.add_argument("-u", "--username", type=str, default=username, help="Prisma Cloud Access Key Id")
+    parser.add_argument("-p", "--password", type=str, default=password, help="Prisma Cloud Secret Key")
+    parser.add_argument("-P", "--prisma-api-endpoint", type=str, default=prisma_api_endpoint, help="Prisma Cloud API Endpoint")
+    parser.add_argument("-e", "--compute-api-endpoint", type=str, default=compute_api_endpoint, help="Prisma Cloud Compute API Endpoint")
     parser.add_argument("-a", "--account-ids", nargs='+', default=[], help="Account IDs where the agentless configuration shall be applied")
     parser.add_argument("--change-state-only", action='store_true', help="Only updates the state of Serverles or Agentless scanning")
     parser.add_argument("--onboarding-mode", type=str, choices=["org", "single"], default=ONBOARDING_MODE, help="Is the way the accounts were onboarded. Can be 'org' or 'single' for organization level or single account level respectively")
@@ -315,251 +570,60 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # General values
-    organization_id = args.organization_id
-    organization_type = args.organization_type
-    username = args.username
-    password = args.password
     prisma_api_endpoint = args.prisma_api_endpoint
     compute_api_endpoint = args.compute_api_endpoint
-    cspm_account_ids = args.account_ids
-    change_state_only = args.change_state_only
-    onboarding_mode = args.onboarding_mode
-    account_groups = args.account_groups
-    scan_mode = args.scan_mode
-    debug = args.debug
-    find_in_org = args.find_in_org
-    backup = args.backup
+    username = args.username
+    password = args.password
 
-    # Agentless arguments
-    hub_account_id = args.hub_account_id
-    subnet_name = args.subnet_name
-    security_group_name = args.security_group_name
-    exclude_tags = format_tags(args.exclude_tags, "Excluded Tags")
-    include_tags = format_tags(args.include_tags, "Included Tags")
-    custom_tags = format_tags(args.custom_tags, "Custom tags")
-    scan_non_running = args.scan_non_running
-    scanners = args.scanners
-    regions = args.regions
-    oci_excluded_compartments = args.oci_excluded_compartments
-    oci_vcn = args.oci_vcn
-    auto_scale = args.auto_scale
-    enforce_permissions_check = args.enforce_permissions_check
-    limit = args.limit
-    bulk_update_count = args.bulk_update_count
-    set_as_hub = args.set_as_hub
-    agentless_state = args.agentless_state
-
-    # Serverless arguments
-    scan_latest = args.scan_latest
-    scan_cap = args.scan_cap
-    scan_layers = args.scan_layers
-    radar_cap = args.radar_cap
-    radar_latest = args.radar_latest
-    serverless_state = args.serverless_state
-
-
-    if exclude_tags and include_tags:
+    # Validations
+    if args.exclude_tags and args.include_tags:
         parser.error("--include-tags and --exclude-tags cannot be used at the same time.")
 
-    if not cspm_account_ids and not organization_id and not account_groups:
+    if not args.account_ids and not args.organization_id and not args.account_groups:
         parser.error("There's not either --account-ids, --organization-id or --account-groups parameters.")
     
-    if not organization_id and not organization_type:   
+    if not args.organization_id and not args.organization_type:   
         parser.error("--organization-id and --organization-type are dependant.")
 
-    if organization_id and not prisma_api_endpoint:   
+    if args.organization_id and not args.prisma_api_endpoint:   
         parser.error("--prisma-api-endpoint is required if --organization-id is set.")
     
-    if hub_account_id and cspm_account_ids:   
-        if hub_account_id in cspm_account_ids:
-            cspm_account_ids.remove(hub_account_id)
-
-    #Set token variables
-    headers = {
-        "Content-Type": "application/json"
-    }
-    token_body = {
-        "username": username,
-        "password": password
-    }
-
-    if not prisma_api_endpoint:
-        if not compute_api_endpoint:   
-            parser.error("If --prisma-api-endpoint is not set, then --compute-api-endpoint is required.")
-        else:
-            # Retrieve Compute Console token
-            compute_token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body))["token"]
-            headers["Authorization"] = f"Bearer {compute_token}"
-
-    else:
-        # Retrieve Prisma Cloud token
-        prisma_token = json.loads(http_request(prisma_api_endpoint, "/login", token_body))["token"]
-        headers["X-Redlock-Auth"] = prisma_token
-        
-        if not compute_api_endpoint:
-            # Get Compute API endpoint
-            compute_api_endpoint = json.loads(http_request(prisma_api_endpoint, "/meta_info", method="GET"))["twistlockUrl"]
-
-        if onboarding_mode == "org":
-            if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH")
-            if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{organization_id}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH")
-
-            if agentless_state or serverless_state:
-                print(f"Changed the state of Org {organization_id}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
-
-                if change_state_only:
-                    print("Only required to change state")
-                    sys.exit(0)
-
-        if account_groups:
-            prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET"))
-            account_group_ids = []
-            cspm_account_ids = []
-
-            for prisma_account_group in prisma_account_groups:
-                if prisma_account_group["name"] in account_groups:
-                    account_group_ids.append(prisma_account_group["id"])
-
-            if debug: print(f"Account groups detected: {' '.join(account_group_ids)}\n")
-
-            accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/name?onlyActive=true&accountGroupIds={','.join(account_group_ids)}&cloudType={organization_type}", method="GET"))
-            backup_data = []
-            if backup:
-                with open(backup) as backup_file:
-                    backup_data = backup_file.read().split("\n")
-
-            for account_info in accounts_info:
-                if account_info["id"] != hub_account_id and ":" not in account_info["id"]:
-                    cspm_account_ids.append(account_info["id"])
-
-                    if onboarding_mode == "single":
-                        try:
-                            if account_info["id"] not in backup_data:
-                                if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH")
-                                if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH")
-                                if debug: print(f"Account modified: {account_info['id']}. Agentless state: {agentless_state}. Serverless state: {serverless_state}")
-                                if backup:
-                                    with open(backup, "a") as backup_file:
-                                        backup_file.write(f"{account_info['id']}\n")
-
-                        except RequestError as err:
-                            print(err)
-                            print(f"Removing account {account_info['id']} from Account Ids")
-                            cspm_account_ids.remove(account_info['id'])
-
-
-            if (agentless_state or serverless_state) and onboarding_mode == "single":
-                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
-                
-                if change_state_only:
-                    print("Only required to change state")
-                    sys.exit(0)
-
-            print(f"Total Accounts in the Account Groups {', '.join(account_groups)}: {len(cspm_account_ids)}")
-            if debug: print(f"Accounts: {', '.join(cspm_account_ids)}")
-
-        elif organization_id:
-            cspm_account_ids = []
-            accounts_info = json.loads(http_request(prisma_api_endpoint, f"/cloud/{organization_type}/{organization_id}/project?excludeAccountGroupDetails=true", method="GET"))
-            for account_info in accounts_info:
-                if account_info["accountId"] != hub_account_id:
-                    cspm_account_ids.append(account_info["accountId"])
-
-            print(f"Total Accounts in the Org {organization_id}: {len(cspm_account_ids)}")
-            if debug: print(f"Accounts: {', '.join(cspm_account_ids)} \n")
-
-    compute_accounts = getCloudAccountsList(compute_api_endpoint, limit, organization_type, scan_mode)
-    data = []
-
-    if hub_account_id:
-        # Updating Hub Account
-        print(f"Updating Hub Account: {hub_account_id}")
-        hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET"))[0]
-        updated_hub_account = update_account_config(
-            hub_account, 
-            subnet_name, 
-            security_group_name, 
-            auto_scale, 
-            regions, 
-            ["none"], 
-            ["none"],
-            custom_tags,
-            "false",
-            scanners,
-            enforce_permissions_check,
-            "true",
-            "",
-            oci_vcn, 
-            oci_excluded_compartments,
-            scan_latest,
-            scan_cap,
-            scan_layers,
-            radar_cap,
-            radar_latest
-        )
-        if debug: print(f"Hub Account {hub_account_id} configuration: {updated_hub_account}\n")
-
-        updateAgentlessConfig([updated_hub_account], compute_api_endpoint)
-
-        set_as_hub = "false"
-        subnet_name = ""
-        security_group_name = ""
-
-    for account in compute_accounts:
-        account_id = account["credential"]["cloudProviderAccountID"]
-        found_in_org = False
-        parent_account_id = ""
-
-        # Find the account if its located inside the organization
-        if find_in_org:
-            if account_id == organization_id:
-                found_in_org = True
-
-            else:
-                response = json.loads(http_request(prisma_api_endpoint, f"/cloud/{organization_type}/{account_id}", method="GET", skip_error=True))
-                if response:
-                    if "parentAccountId" in response:
-                        parent_account_id = response["parentAccountId"]
-                    elif "cloudAccount" in response:
-                        if "parentAccountId" in response["cloudAccount"]:
-                            parent_account_id = response["cloudAccount"]["parentAccountId"]
-
-                    found_in_org = parent_account_id == organization_id
-                    if found_in_org and debug: print(f"Account {account_id} found in organization {organization_id}")
-                    
-
-        if account_id in cspm_account_ids or found_in_org:
-            updated_account = update_account_config(
-                account, 
-                subnet_name, 
-                security_group_name, 
-                auto_scale,
-                regions, 
-                include_tags, 
-                exclude_tags,
-                custom_tags,
-                scan_non_running,
-                scanners,
-                enforce_permissions_check,
-                set_as_hub,
-                hub_account_id,
-                oci_vcn, 
-                oci_excluded_compartments,
-                scan_latest,
-                scan_cap,
-                scan_layers,
-                radar_cap,
-                radar_latest
-            )
-
-            if updated_account:
-                data.append(updated_account)
-
-            if not found_in_org:
-                cspm_account_ids.remove(account_id)
-        
-            if debug: print(f"Target Account {account_id} configuration: {updated_account}\n")
-
-    updateAgentlessConfig(data, compute_api_endpoint)
-    print(f"Total Target Accounts Modified: {len(data)}")
+    # Configure Agentless
+    configAgentless(
+        # General values
+        organization_id = args.organization_id,
+        organization_type = args.organization_type,
+        account_ids = args.account_ids,
+        change_state_only = args.change_state_only,
+        onboarding_mode = args.onboarding_mode,
+        account_groups = args.account_groups,
+        scan_mode = args.scan_mode,
+        debug = args.debug,
+        find_in_org = args.find_in_org,
+        backup = args.backup,
+        # Agentless arguments
+        hub_account_id = args.hub_account_id,
+        subnet_name = args.subnet_name,
+        security_group_name = args.security_group_name,
+        exclude_tags = formatTags(args.exclude_tags, "Excluded Tags"),
+        include_tags = formatTags(args.include_tags, "Included Tags"),
+        custom_tags = formatTags(args.custom_tags, "Custom tags"),
+        scan_non_running = args.scan_non_running,
+        scanners = args.scanners,
+        regions = args.regions,
+        oci_excluded_compartments = args.oci_excluded_compartments,
+        oci_vcn = args.oci_vcn,
+        auto_scale = args.auto_scale,
+        enforce_permissions_check = args.enforce_permissions_check,
+        limit = args.limit,
+        bulk_update_count = args.bulk_update_count,
+        set_as_hub = args.set_as_hub,
+        agentless_state = args.agentless_state,
+        # Serverless arguments
+        scan_latest = args.scan_latest,
+        scan_cap = args.scan_cap,
+        scan_layers = args.scan_layers,
+        radar_cap = args.radar_cap,
+        radar_latest = args.radar_latest,
+        serverless_state = args.serverless_state
+    )
