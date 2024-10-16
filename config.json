@@ -1,5 +1,4 @@
 {
-    "changeStateOnly": false,
     "findInOrg": false,
     "debug": true,
     "backup": "",
@@ -7,6 +6,7 @@
     "bulkUpdateCount": 20,
     "accountSets": [
         {
+            "changeStateOnly": false,
             "organizationId": "",
             "organizationType": "",
             "accountGroups": [],

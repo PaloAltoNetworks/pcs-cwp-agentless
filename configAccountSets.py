@@ -13,7 +13,6 @@ if __name__ == "__main__":
     with open(CONFIG_FILE) as config_file:
         config = json.loads(config_file.read())
 
-    change_state_only = config["changeStateOnly"]
     find_in_org = config["findInOrg"]
     debug = config["debug"]
     backup = config["backup"]
@@ -23,6 +22,7 @@ if __name__ == "__main__":
     # Configure Account Sets
     for account_set in config["accountSets"]:
         # General parameters
+        change_state_only = account_set["changeStateOnly"]
         organization_id = account_set["organizationId"]
         organization_type = account_set["organizationType"]
         account_groups = account_set["accountGroups"]
@@ -55,41 +55,41 @@ if __name__ == "__main__":
         radar_latest = account_set["serverless"]["radarLatest"]
         serverless_state = account_set["serverless"]["serverlessState"]
 
-    configAgentless(
-        # General values
-        organization_id,
-        organization_type,
-        account_ids,
-        change_state_only,
-        onboarding_mode,
-        account_groups,
-        scan_mode,
-        debug,
-        find_in_org,
-        backup,
-        # Agentless arguments
-        hub_account_id,
-        subnet_name,
-        security_group_name,
-        exclude_tags,
-        include_tags,
-        custom_tags,
-        scan_non_running,
-        scanners,
-        regions,
-        oci_excluded_compartments,
-        oci_vcn,
-        auto_scale,
-        enforce_permissions_check,
-        limit,
-        bulk_update_count,
-        set_as_hub,
-        agentless_state,
-        # Serverless arguments
-        scan_latest,
-        scan_cap,
-        scan_layers,
-        radar_cap,
-        radar_latest,
-        serverless_state
-    )
+        configAgentless(
+            # General values
+            organization_id,
+            organization_type,
+            account_ids,
+            change_state_only,
+            onboarding_mode,
+            account_groups,
+            scan_mode,
+            debug,
+            find_in_org,
+            backup,
+            # Agentless arguments
+            hub_account_id,
+            subnet_name,
+            security_group_name,
+            exclude_tags,
+            include_tags,
+            custom_tags,
+            scan_non_running,
+            scanners,
+            regions,
+            oci_excluded_compartments,
+            oci_vcn,
+            auto_scale,
+            enforce_permissions_check,
+            limit,
+            bulk_update_count,
+            set_as_hub,
+            agentless_state,
+            # Serverless arguments
+            scan_latest,
+            scan_cap,
+            scan_layers,
+            radar_cap,
+            radar_latest,
+            serverless_state
+        )
