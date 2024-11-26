@@ -18,6 +18,7 @@ if __name__ == "__main__":
     backup = config["backup"]
     limit = config["limit"]
     bulk_update_count = config["bulkUpdateCount"]
+    credentials = None
 
     # Configure Account Sets
     for account_set in config["accountSets"]:
@@ -29,6 +30,7 @@ if __name__ == "__main__":
         account_ids = account_set["accountIds"]
         onboarding_mode = account_set["onboardingMode"]
         scan_mode = account_set["scanMode"]
+        if "credentials" in account_set: credentials = account_set["credentials"]
 
         # Agentless parameters
         hub_account_id = account_set["agentless"]["hubAccountId"] 
@@ -91,5 +93,6 @@ if __name__ == "__main__":
             scan_layers,
             radar_cap,
             radar_latest,
-            serverless_state
+            serverless_state,
+            credentials
         )

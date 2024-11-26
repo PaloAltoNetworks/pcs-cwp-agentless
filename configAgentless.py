@@ -318,7 +318,8 @@ def configAgentless(
     scan_layers = "",
     radar_cap = 0,
     radar_latest = "",
-    serverless_state = ""
+    serverless_state = "",
+    credentials = ""
 ):
     global prisma_api_endpoint
     global compute_api_endpoint
@@ -391,6 +392,31 @@ def configAgentless(
                                 if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH", debug=debug)
                                 if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH", debug=debug)
                                 if debug: print(f"Account modified: {account_info['id']}. Agentless state: {agentless_state}. Serverless state: {serverless_state}")
+                                if credentials and organization_type == "azure":
+                                    # Get current account configuration
+                                    account_details = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_info['id']}", method="GET", debug=debug))
+                                    credentials_details = json.loads(os.getenv(credentials, "{}"))
+                                    account_details.update(credentials_details)
+                                    new_account_details = {
+                                        "cloudAccount": {
+                                            "accountId": account_details["cloudAccount"]["accountId"],
+                                            "accountType": account_details["cloudAccount"]["accountType"],
+                                            "name": account_details["cloudAccount"]["name"],
+                                            "groupIds": account_details["groupIds"]
+                                        },
+                                        "monitorFlowLogs": account_details["monitorFlowLogs"],
+                                        "environmentType": account_details["environmentType"],
+                                        "authMode": account_details["authMode"],
+                                        "tenantId": account_details["tenantId"],
+                                        "clientId": account_details["clientId"],
+                                        "servicePrincipalId": account_details["servicePrincipalId"],
+                                        "key": account_details["key"]
+                                    }
+
+                                    # Update credentials
+                                    http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_info['id']}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
+                                    if debug: print(f"Updated credentials for account {account_info['id']}")
+
                                 if backup:
                                     with open(backup, "a") as backup_file:
                                         backup_file.write(f"{account_info['id']}\n")
@@ -401,8 +427,8 @@ def configAgentless(
                             account_ids.remove(account_info['id'])
 
 
-            if (agentless_state or serverless_state) and onboarding_mode == "single":
-                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}", debug=debug)
+            if (agentless_state or serverless_state or (credentials and organization_type == "azure")) and onboarding_mode == "single":
+                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
                 
                 if change_state_only:
                     print("Only required to change state")
@@ -539,7 +565,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action='store_true', default=DEBUG, help="Print detailed output")
     parser.add_argument("--find-in-org", action='store_true', help="Find if the account is in the Organization if it is not in the Account Group chosen")
     parser.add_argument("--backup", type=str, help="Stores a backup state of the modified accounts to a file")
-
+    parser.add_argument("--credentials", type=str, help="Environment variable where the credentials are being stored for the select Cloud Accounts. (Only Azure is supported for the moment)")
 
     # Agentless Parameters
     parser.add_argument("-H", "--hub-account-id", type=str, default=HUB_ACCOUNT_ID, help="ID of the account to be set as Hub")
@@ -625,5 +651,6 @@ if __name__ == "__main__":
         scan_layers = args.scan_layers,
         radar_cap = args.radar_cap,
         radar_latest = args.radar_latest,
-        serverless_state = args.serverless_state
+        serverless_state = args.serverless_state,
+        credentials= args.credentials
     )
