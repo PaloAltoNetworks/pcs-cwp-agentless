@@ -319,14 +319,16 @@ def configAgentless(
     radar_cap = 0,
     radar_latest = "",
     serverless_state = "",
-    credentials = ""
+    credentials = None
 ):
     global prisma_api_endpoint
     global compute_api_endpoint
     global headers
     global username
     global password
-    
+
+    individual_accounts = account_ids.copy()
+
     token_body = {
         "username": username,
         "password": password
@@ -365,10 +367,10 @@ def configAgentless(
                     print("Only required to change state")
                     sys.exit(0)
 
-        if account_groups:
+        if account_groups or account_ids:
             prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
             account_group_ids = []
-            account_ids = []
+            
 
             for prisma_account_group in prisma_account_groups:
                 if prisma_account_group["name"] in account_groups:
@@ -386,53 +388,56 @@ def configAgentless(
                 if account_info["id"] != hub_account_id and ":" not in account_info["id"]:
                     account_ids.append(account_info["id"])
 
-                    if onboarding_mode == "single":
-                        try:
-                            if account_info["id"] not in backup_data:
-                                if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH", debug=debug)
-                                if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_info['id']}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH", debug=debug)
-                                if debug: print(f"Account modified: {account_info['id']}. Agentless state: {agentless_state}. Serverless state: {serverless_state}")
-                                if credentials and organization_type == "azure":
-                                    # Get current account configuration
-                                    account_details = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_info['id']}", method="GET", debug=debug))
-                                    credentials_details = json.loads(os.getenv(credentials, "{}"))
-                                    account_details.update(credentials_details)
-                                    new_account_details = {
-                                        "cloudAccount": {
-                                            "accountId": account_details["cloudAccount"]["accountId"],
-                                            "accountType": account_details["cloudAccount"]["accountType"],
-                                            "name": account_details["cloudAccount"]["name"],
-                                            "groupIds": account_details["groupIds"]
-                                        },
-                                        "monitorFlowLogs": account_details["monitorFlowLogs"],
-                                        "environmentType": account_details["environmentType"],
-                                        "authMode": account_details["authMode"],
-                                        "tenantId": account_details["tenantId"],
-                                        "clientId": account_details["clientId"],
-                                        "servicePrincipalId": account_details["servicePrincipalId"],
-                                        "key": account_details["key"]
-                                    }
+            if onboarding_mode == "single":
+                for account_id in account_ids:
+                    try:
+                        if account_id not in backup_data:
+                            if agentless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_id}/feature/compute-agentless", body={"state": agentless_state}, method="PATCH", debug=debug)
+                            if serverless_state: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_id}/feature/compute-serverless-scan", body={"state": serverless_state}, method="PATCH", debug=debug)
+                            if debug and (agentless_state or serverless_state): print(f"Account modified: {account_id}. Agentless state: {agentless_state}. Serverless state: {serverless_state}")
+ 
+                            #Update credentials for Azure Accounts
+                            if credentials and organization_type == "azure":
+                                # Get current account configuration
+                                account_details = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_id}", method="GET", debug=debug))
+                                credentials_details = json.loads(os.getenv(credentials, "{}"))
+                                account_details.update(credentials_details)
+                                new_account_details = {
+                                    "cloudAccount": {
+                                        "accountId": account_details["cloudAccount"]["accountId"],
+                                        "accountType": account_details["cloudAccount"]["accountType"],
+                                        "name": account_details["cloudAccount"]["name"],
+                                        "groupIds": account_details["groupIds"]
+                                    },
+                                    "monitorFlowLogs": account_details["monitorFlowLogs"],
+                                    "environmentType": account_details["environmentType"],
+                                    "authMode": account_details["authMode"],
+                                    "tenantId": account_details["tenantId"],
+                                    "clientId": account_details["clientId"],
+                                    "servicePrincipalId": account_details["servicePrincipalId"],
+                                    "key": account_details["key"]
+                                }
 
-                                    # Update credentials
-                                    http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_info['id']}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
-                                    if debug: print(f"Updated credentials for account {account_info['id']}")
+                                # Update credentials
+                                http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
+                                if debug: print(f"Updated credentials for account {account_id} \n")
 
-                                if backup:
-                                    with open(backup, "a") as backup_file:
-                                        backup_file.write(f"{account_info['id']}\n")
+                            if backup:
+                                with open(backup, "a") as backup_file:
+                                    backup_file.write(f"{account_id}\n")
 
-                        except RequestError as err:
-                            print(err)
-                            print(f"Removing account {account_info['id']} from Account Ids")
-                            account_ids.remove(account_info['id'])
+                    except RequestError as err:
+                        print(err)
+                        print(f"Removing account {account_id} from Account Ids")
+                        account_ids.remove(account_id)
 
 
             if (agentless_state or serverless_state or (credentials and organization_type == "azure")) and onboarding_mode == "single":
-                print(f"Changed the state of accounts under Account Groups: {', '.join(account_groups)}. Agentless: {agentless_state}. Serverless Scan: {serverless_state}")
+                print(f"Changed the state of accounts. Account Groups: {', '.join(account_groups)}. Individual Accounts: {', '.join(individual_accounts)}. Credentials updated: {credentials != None}. Agentless updated: {agentless_state != ''}. Serverless Scan updated: {serverless_state != ''}")
                 
                 if change_state_only:
                     print("Only required to change state")
-                    sys.exit(0)
+                    return 0
 
             print(f"Total Accounts in the Account Groups {', '.join(account_groups)}: {len(account_ids)}")
             if debug: print(f"Accounts: {', '.join(account_ids)}")

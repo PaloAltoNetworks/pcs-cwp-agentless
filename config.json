@@ -11,6 +11,7 @@
             "organizationType": "",
             "accountGroups": [],
             "accountIds": [],
+            "credentials": "",
             "onboardingMode":"org",
             "scanMode": "",
             "agentless": {
