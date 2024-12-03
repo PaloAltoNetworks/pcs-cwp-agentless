@@ -1,0 +1,12 @@
+[
+    {
+        "name": "api-testing-ag-0001",
+        "file": "api-testing-ag-0001.csv",
+        "validate": true
+    },
+    {
+        "name": "api-testing-ag-0002",
+        "file": "api-testing-ag-0002.csv",
+        "validate": true
+    }
+]

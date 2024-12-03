@@ -164,3 +164,4 @@ results.json
 backup/
 Azure/
 output.txt
+*.csv
