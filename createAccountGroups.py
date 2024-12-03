@@ -28,6 +28,8 @@ SLEEP = int(os.getenv("SLEEP", "5"))
 DEBUG = os.getenv("DEBUG", "false") in ("true", "True", "1", "y", "yes")
 CONFIG_FILE = os.getenv("CONFIG_FILE_AG", "accountGroups.json")
 COLUMN_NAME = os.getenv("COLUMN_NAME", "subscriptionId")
+NON_ONBOARDED_FILE = os.getenv("NON_ONBOARDED_FILE", "nonOnboardedAccounts.json")
+
 
 http = urllib3.PoolManager()
 
@@ -82,13 +84,24 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
     prisma_token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
     headers["X-Redlock-Auth"] = prisma_token
 
+    with open(NON_ONBOARDED_FILE) as f:
+        non_onboarded_accounts = json.loads(f.read())
+
+    non_onboarded_accounts[name] = []
+    account_ids_new = account_ids.copy() 
+
     # Validate if Cloud Accounts exists
     if validate_accounts:
         for account_id in account_ids:
             response = json.loads(http_request(prisma_api_endpoint, f"/account/{account_id}/config/status", method="GET", skip_error=True))
             if not response:
                 print(f"Account {account_id} is not onboarded on Prisma Cloud tenant")
-                account_ids.remove(account_id)
+                non_onboarded_accounts[name].append(account_id)
+                account_ids_new.remove(account_id)
+    
+    # Write report of accounts that are not validated
+    with open(NON_ONBOARDED_FILE, "w") as f:
+        f.write(json.dumps(non_onboarded_accounts))
     
     # Validate if Account Group exists 
     group_id = ""
@@ -102,7 +115,7 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
     # Update existing Account Group, else create it
     body = {
         "name": name,
-        "accountIds": account_ids,
+        "accountIds": account_ids_new,
         "childGroupIds": [],
         "description": description,
         "nonOnboardedCloudAccountIds": []
