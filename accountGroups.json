@@ -3,11 +3,13 @@
         "name": "api-testing-ag-0001",
         "file": "api-testing-ag-0001.csv",
         "description":"Testing",
-        "validate": true
+        "validate": true,
+        "create_account_group": false
     },
     {
         "name": "api-testing-ag-0002",
         "file": "api-testing-ag-0002.csv",
-        "validate": true
+        "validate": true,
+        "create_account_group": false
     }
 ]

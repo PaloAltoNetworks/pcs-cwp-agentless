@@ -29,7 +29,7 @@ DEBUG = os.getenv("DEBUG", "false") in ("true", "True", "1", "y", "yes")
 CONFIG_FILE = os.getenv("CONFIG_FILE_AG", "accountGroups.json")
 COLUMN_NAME = os.getenv("COLUMN_NAME", "subscriptionId")
 NON_ONBOARDED_FILE = os.getenv("NON_ONBOARDED_FILE", "nonOnboardedAccounts.json")
-
+VALIDATION_ERRORS = os.getenv("VALIDATION_ERRORS", "validationErrors.json")
 
 http = urllib3.PoolManager()
 
@@ -69,7 +69,7 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, d
     if debug: print(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
     return "{}"
 
-def createAccountGroup(name, account_ids, description = "", validate_accounts = False, debug = DEBUG):
+def createAccountGroup(name, account_ids, description = "", validate_accounts = False, create_account_group = True, debug = DEBUG):
     # Load global variables
     global prisma_api_endpoint
     global headers
@@ -84,10 +84,15 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
     prisma_token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
     headers["X-Redlock-Auth"] = prisma_token
 
-    with open(NON_ONBOARDED_FILE) as f:
-        non_onboarded_accounts = json.loads(f.read())
+    with open(NON_ONBOARDED_FILE) as non_onboarded_file:
+        non_onboarded_accounts = json.loads(non_onboarded_file.read())
+
+    with open(VALIDATION_ERRORS) as validation_file:
+        validation_errors = json.loads(validation_file.read())
 
     non_onboarded_accounts[name] = []
+    validation_errors[name] = {}
+    print(validation_errors)
     account_ids_new = account_ids.copy() 
 
     # Validate if Cloud Accounts exists
@@ -98,10 +103,31 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
                 print(f"Account {account_id} is not onboarded on Prisma Cloud tenant")
                 non_onboarded_accounts[name].append(account_id)
                 account_ids_new.remove(account_id)
+            else:
+                errors = {}
+                agentless_enabled = False
+                serverless_enabled = False
+                for feature in response:
+                    if feature["name"] == "Authentication":
+                        if feature["status"] == "error":
+                            errors["Authentication"] = "error"
+                    elif feature["name"] == "Agentless Scanning":
+                        agentless_enabled = True
+                    elif feature["name"] == "Serverless Function Scanning":
+                        serverless_enabled = True
+                
+                if not agentless_enabled: errors["agentless_enabled"] = False
+                if not serverless_enabled: errors["serverless_enabled"] = False
+            
+                if errors:
+                    validation_errors[name][account_id] = errors
     
     # Write report of accounts that are not validated
-    with open(NON_ONBOARDED_FILE, "w") as f:
-        f.write(json.dumps(non_onboarded_accounts))
+    with open(NON_ONBOARDED_FILE, "w") as non_onboarded_file:
+        non_onboarded_file.write(json.dumps(non_onboarded_accounts))
+    
+    with open(VALIDATION_ERRORS, "w") as validation_file:
+        validation_file.write(json.dumps(validation_errors))
     
     # Validate if Account Group exists 
     group_id = ""
@@ -121,10 +147,11 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
         "nonOnboardedCloudAccountIds": []
     }
 
-    if group_id:
-        http_request(prisma_api_endpoint, f"/cloud/group/{group_id}", method="PUT", body=body, debug=debug)
-    else:
-        http_request(prisma_api_endpoint, f"/cloud/group", method="POST", body=body, debug=debug)
+    if create_account_group:
+        if group_id:
+            http_request(prisma_api_endpoint, f"/cloud/group/{group_id}", method="PUT", body=body, debug=debug)
+        else:
+            http_request(prisma_api_endpoint, f"/cloud/group", method="POST", body=body, debug=debug)
 
 
 if __name__ == "__main__":
@@ -134,12 +161,14 @@ if __name__ == "__main__":
     for account_group in config:
         description = ""
         validate = False
+        create_account_group = True
         name = account_group["name"]
         
         if "description" in account_group: description = account_group["description"]
         if "validate" in account_group: validate = account_group["validate"]
+        if "create_account_group" in account_group: create_account_group = account_group["create_account_group"] 
 
         account_ids_data = read_csv(account_group["file"])
         account_ids = account_ids_data[COLUMN_NAME].to_list()
 
-        createAccountGroup(name, account_ids, description, validate)
+        createAccountGroup(name, account_ids, description, validate, create_account_group)
