@@ -69,7 +69,7 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, d
     if debug: print(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
     return "{}"
 
-def createAccountGroup(name, account_ids, description = "", validate_accounts = False, create_account_group = True, debug = DEBUG):
+def createAccountGroup(name, account_ids, description = "", validate_accounts = False, create_account_group = True, client_id = "", debug = DEBUG):
     # Load global variables
     global prisma_api_endpoint
     global headers
@@ -99,6 +99,7 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
     if validate_accounts:
         for account_id in account_ids:
             response = json.loads(http_request(prisma_api_endpoint, f"/account/{account_id}/config/status", method="GET", skip_error=True))
+                
             if not response:
                 print(f"Account {account_id} is not onboarded on Prisma Cloud tenant")
                 non_onboarded_accounts[name].append(account_id)
@@ -118,7 +119,11 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
                 
                 if not agentless_enabled: errors["agentless_enabled"] = False
                 if not serverless_enabled: errors["serverless_enabled"] = False
-            
+                if client_id:
+                    prisma_clientId = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_id}", method="GET", skip_error=True))["clientId"]
+                    if client_id != prisma_clientId:
+                        errors["credentials_error"] = True
+
                 if errors:
                     validation_errors[name][account_id] = errors
     
@@ -162,13 +167,15 @@ if __name__ == "__main__":
         description = ""
         validate = False
         create_account_group = True
+        client_id = ""
         name = account_group["name"]
         
         if "description" in account_group: description = account_group["description"]
         if "validate" in account_group: validate = account_group["validate"]
         if "create_account_group" in account_group: create_account_group = account_group["create_account_group"] 
+        if "clientId" in account_group: client_id = account_group["clientId"]
 
         account_ids_data = read_csv(account_group["file"])
         account_ids = account_ids_data[COLUMN_NAME].to_list()
 
-        createAccountGroup(name, account_ids, description, validate, create_account_group)
+        createAccountGroup(name, account_ids, description, validate, create_account_group, client_id)

@@ -4,7 +4,8 @@
         "file": "api-testing-ag-0001.csv",
         "description":"Testing",
         "validate": true,
-        "create_account_group": false
+        "create_account_group": false,
+        "clientId": "111111-1111-1111-1111-111111111111"
     },
     {
         "name": "api-testing-ag-0002",
