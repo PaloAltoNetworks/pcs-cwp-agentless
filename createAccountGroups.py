@@ -80,11 +80,12 @@ def createAccountGroup(
         dry_run = False, 
         credentials_details = {}, 
         onboard_account = True, 
-        update_credentials = True, 
-        account_groups = ["Default Account Group"], 
+        additional_groups = ["Default Account Group"],
+        excluded_groups = [],
         custom_tags = {},
         include_tags = {},
         scan_cap = "",
+        fix_only = False,
         debug = DEBUG
     ):
     # Load global variables
@@ -118,12 +119,24 @@ def createAccountGroup(
     account_ids_new = account_ids.copy()
     update_agentless_accounts = []
 
-    prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
+    # Validate if Account Groups exists 
     account_group_ids = []
+    excluded_groups_ids = []
+    group_id = ""
+    
+    prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
+    
 
     for prisma_account_group in prisma_account_groups:
-        if prisma_account_group["name"] in account_groups:
+        if prisma_account_group["name"] in additional_groups:
             account_group_ids.append(prisma_account_group["id"])
+
+        if prisma_account_group["name"] == name:
+            account_group_ids.append(prisma_account_group["id"])
+            group_id = prisma_account_group["id"]
+    
+        if prisma_account_group["name"] in excluded_groups:
+            excluded_groups_ids.append(prisma_account_group["id"])
 
     # Validate if Cloud Accounts exists
     if validate_accounts:
@@ -201,29 +214,30 @@ def createAccountGroup(
                 if credentials_details:
                     if credentials_details["clientId"] != prisma_clientId:
                         errors["credentials_error"] = True
+                        account_details.update(credentials_details)
+                        print(f"Credentials mistmatch in account {account_id}. Account Group: {name}\n")                        
+
+                group_ids = list((set(account_details["groupIds"]) | set(account_group_ids)) - set(excluded_groups_ids))
+                new_account_details = {
+                    "cloudAccount": {
+                        "accountId": account_details["cloudAccount"]["accountId"],
+                        "accountType": account_details["cloudAccount"]["accountType"],
+                        "name": account_details["cloudAccount"]["name"],
+                        "groupIds": group_ids
+                    },
+                    "monitorFlowLogs": account_details["monitorFlowLogs"],
+                    "environmentType": account_details["environmentType"],
+                    "authMode": account_details["authMode"],
+                    "tenantId": account_details["tenantId"],
+                    "clientId": account_details["clientId"],
+                    "servicePrincipalId": account_details["servicePrincipalId"],
+                    "key": account_details["key"]
+                }
+                # Update credentials
+                if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
+                if debug: print(f"Updated credentials for account {account_id}. Account Group: {account_group['name']} \n")
                 
-                        if update_credentials:
-                            account_details.update(credentials_details)
-                            new_account_details = {
-                                "cloudAccount": {
-                                    "accountId": account_details["cloudAccount"]["accountId"],
-                                    "accountType": account_details["cloudAccount"]["accountType"],
-                                    "name": account_details["cloudAccount"]["name"],
-                                    "groupIds": account_details["groupIds"]
-                                },
-                                "monitorFlowLogs": account_details["monitorFlowLogs"],
-                                "environmentType": account_details["environmentType"],
-                                "authMode": account_details["authMode"],
-                                "tenantId": account_details["tenantId"],
-                                "clientId": account_details["clientId"],
-                                "servicePrincipalId": account_details["servicePrincipalId"],
-                                "key": account_details["key"]
-                            }
-                            # Update credentials
-                            if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
-                            if debug: print(f"Updated credentials for account {account_id}. Account Group: {account_group['name']} \n")
-                            
-                            update_agentless_accounts.append(account_id)
+                update_agentless_accounts.append(account_id)
 
 
                 if errors:
@@ -236,14 +250,6 @@ def createAccountGroup(
     with open(VALIDATION_ERRORS, "w") as validation_file:
         validation_file.write(json.dumps(validation_errors))
     
-    # Validate if Account Group exists 
-    group_id = ""
-    prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
-    
-    for prisma_account_group in prisma_account_groups:
-        if prisma_account_group["name"] == name:
-            group_id = prisma_account_group["id"]
-            break
 
     # Update existing Account Group, else create it
     body = {
@@ -256,12 +262,13 @@ def createAccountGroup(
 
     if not dry_run:
         if group_id:
-            http_request(prisma_api_endpoint, f"/cloud/group/{group_id}", method="PUT", body=body, debug=debug)
+            if not fix_only: http_request(prisma_api_endpoint, f"/cloud/group/{group_id}", method="PUT", body=body, debug=debug)
         else:
-            http_request(prisma_api_endpoint, f"/cloud/group", method="POST", body=body, debug=debug)
+            if not fix_only: http_request(prisma_api_endpoint, f"/cloud/group", method="POST", body=body, debug=debug)
 
 
     accounts_len = len(update_agentless_accounts)
+    sleep(SLEEP)
 
     if accounts_len > 0:
         idx = 0
@@ -272,35 +279,36 @@ def createAccountGroup(
                 accounts_filter = ",".join(update_agentless_accounts[idx:])
 
             data = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={accounts_filter}", method="GET", debug=debug))
-            for account in data:
-                if hub_account_id: 
-                    account["agentlessScanSpec"]["hubAccount"] = False
-                    account["agentlessScanSpec"]["hubCredentialID"] = hub_account_id
-                    account["agentlessScanSpec"]["scanners"] = 0
-                    account["agentlessScanSpec"]["autoScale"] = False
-                    account["agentlessScanSpec"]["skipPermissionsCheck"] = True
+            if data:
+                for account in data:
+                    if hub_account_id: 
+                        account["agentlessScanSpec"]["hubAccount"] = False
+                        account["agentlessScanSpec"]["hubCredentialID"] = hub_account_id
+                        account["agentlessScanSpec"]["scanners"] = 0
+                        account["agentlessScanSpec"]["autoScale"] = False
+                        account["agentlessScanSpec"]["skipPermissionsCheck"] = True
 
-                if include_tags: 
-                    if include_tags == ["none"]:
-                        account["agentlessScanSpec"]["includedTags"] = []
-                    else:
-                        account["agentlessScanSpec"]["includedTags"] = include_tags
-                        
-                    if "excludedTags" in account["agentlessScanSpec"]:
-                        del account["agentlessScanSpec"]["excludedTags"]
+                    if include_tags: 
+                        if include_tags == ["none"]:
+                            account["agentlessScanSpec"]["includedTags"] = []
+                        else:
+                            account["agentlessScanSpec"]["includedTags"] = include_tags
+                            
+                        if "excludedTags" in account["agentlessScanSpec"]:
+                            del account["agentlessScanSpec"]["excludedTags"]
 
 
-                if custom_tags: 
-                    if custom_tags == ["none"]:
-                        account["agentlessScanSpec"]["customTags"] = []
-                    else:
-                        account["agentlessScanSpec"]["customTags"] = custom_tags
-                
-                
-                if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
+                    if custom_tags: 
+                        if custom_tags == ["none"]:
+                            account["agentlessScanSpec"]["customTags"] = []
+                        else:
+                            account["agentlessScanSpec"]["customTags"] = custom_tags
+                    
+                    
+                    if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
 
-            # Update agentless scanning
-            if not dry_run: http_request(compute_api_endpoint,"/api/v1/cloud-scan-rules", data, method="PUT", debug=debug)
+                # Update agentless scanning
+                if not dry_run: http_request(compute_api_endpoint,"/api/v1/cloud-scan-rules", data, method="PUT", debug=debug)
 
             idx += BULK_UPDATE_COUNT
 
@@ -329,6 +337,9 @@ if __name__ == "__main__":
             custom_tags = {}
             include_tags = {}
             scan_cap = ""
+            fix_only = False
+            additional_groups = []
+            excluded_groups = []
 
             if "description" in account_group: description = account_group["description"]
             if "validate" in account_group: validate = account_group["validate"]
@@ -337,6 +348,9 @@ if __name__ == "__main__":
             if "customTags" in account_group: custom_tags = account_group["customTags"]
             if "includeTags" in account_group: include_tags = account_group["includeTags"]
             if "scanCap" in account_group: scan_cap = account_group["scanCap"]
+            if "fixOnly" in account_group: fix_only = account_group["fixOnly"]
+            if "additionalGroups" in account_group: additional_groups = account_group["additionalGroups"]
+            if "excludedGroups" in account_group: excluded_groups = account_group["excludedGroups"]
 
             account_ids_data = read_csv(account_group["file"])
             account_ids = account_ids_data[COLUMN_SUBSCRIPTIONS].to_list()
@@ -353,5 +367,8 @@ if __name__ == "__main__":
                 credentials_details=credentials_details,
                 custom_tags=custom_tags,
                 include_tags=include_tags,
-                scan_cap=scan_cap
+                scan_cap=scan_cap,
+                fix_only=fix_only,
+                additional_groups=additional_groups,
+                excluded_groups=excluded_groups
             )

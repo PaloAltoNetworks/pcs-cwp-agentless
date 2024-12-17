@@ -1,9 +1,9 @@
 [
     {
-        "prisma_api_endpoint": "PRISMA_API_ENDPOINT",
+        "prisma_api_endpoint": "PRISMA_API_ENDPOINT_1",
         "compute_api_endpoint": "",
-        "username":"PRISMA_USERNAME",
-        "password":"PRISMA_PASSWORD",
+        "username":"PRISMA_USERNAME_1",
+        "password":"PRISMA_PASSWORD_1",
         "dry_run": false,
         "account_groups": [
             {
@@ -12,7 +12,12 @@
                 "description":"Testing AG 0001",
                 "credentials": "AZURE_CREDENTIALS",
                 "validate": true,
+                "fixOnly": true,
                 "hubAccountId": "",
+                "additionalGroups": [
+                    "Default Account Group"
+                ],
+                "excludedGroups": [],
                 "includeTags":[
                     {
                         "key": "aks-managed-poolName",
@@ -26,14 +31,28 @@
                     }
                 ],
                 "scanCap": "0"
-            },
+            }
+        ]
+    },
+    {
+        "prisma_api_endpoint": "PRISMA_API_ENDPOINT_2",
+        "compute_api_endpoint": "",
+        "username":"PRISMA_USERNAME_2",
+        "password":"PRISMA_PASSWORD_2",
+        "dry_run": false,
+        "account_groups": [
             {
                 "name": "api-testing-ag-0002",
                 "file": "api-testing-ag-0002.csv",
                 "description":"Testing AG 0002",
-                "credentials": "AZURE_CREDENTIALS2",
+                "credentials": "AZURE_CREDENTIALS_2",
                 "validate": true,
+                "fixOnly": true,
                 "hubAccountId": "",
+                "additionalGroups": [
+                    "Default Account Group"
+                ],
+                "excludedGroups": [],
                 "includeTags":[
                     {
                         "key": "aks-managed-poolName",
@@ -43,12 +62,46 @@
                 "customTags": [
                     {
                         "key": "custom_tag",
-                        "value": "testing2"
+                        "value": "testing"
                     }
                 ],
                 "scanCap": "0"
             }
         ]
-        
+    },
+    {
+        "prisma_api_endpoint": "PRISMA_API_ENDPOINT_3",
+        "compute_api_endpoint": "",
+        "username":"PRISMA_USERNAME_3",
+        "password":"PRISMA_PASSWORD_3",
+        "dry_run": false,
+        "account_groups": [
+            {
+                "name": "api-testing-ag-0003",
+                "file": "api-testing-ag-0003.csv",
+                "description":"Testing AG 0003",
+                "credentials": "AZURE_CREDENTIALS_3",
+                "validate": true,
+                "fixOnly": true,
+                "hubAccountId": "",
+                "additionalGroups": [
+                    "Default Account Group"
+                ],
+                "excludedGroups": [],
+                "includeTags":[
+                    {
+                        "key": "aks-managed-poolName",
+                        "value": ""
+                    }
+                ],
+                "customTags": [
+                    {
+                        "key": "custom_tag",
+                        "value": "testing"
+                    }
+                ],
+                "scanCap": "0"
+            }
+        ]
     }
 ]
