@@ -65,11 +65,11 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, d
             "password": password
         }
 
-        if api_endpoint == prisma_api_endpoint:
+        if "X-Redlock-Auth" in headers:
             token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
             headers["X-Redlock-Auth"] = token
 
-        if api_endpoint == compute_api_endpoint:
+        elif "Authorization" in headers:
             token = json.loads(http_request(compute_api_endpoint, "/api/v1/authenticate", token_body, debug=debug))["token"]
             headers["Authorization"] = f"Bearer {token}"
             

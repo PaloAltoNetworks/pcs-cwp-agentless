@@ -1,16 +1,54 @@
 [
     {
-        "name": "api-testing-ag-0001",
-        "file": "api-testing-ag-0001.csv",
-        "description":"Testing",
-        "validate": true,
-        "create_account_group": false,
-        "clientId": "111111-1111-1111-1111-111111111111"
-    },
-    {
-        "name": "api-testing-ag-0002",
-        "file": "api-testing-ag-0002.csv",
-        "validate": true,
-        "create_account_group": false
+        "prisma_api_endpoint": "PRISMA_API_ENDPOINT",
+        "compute_api_endpoint": "",
+        "username":"PRISMA_USERNAME",
+        "password":"PRISMA_PASSWORD",
+        "dry_run": false,
+        "account_groups": [
+            {
+                "name": "api-testing-ag-0001",
+                "file": "api-testing-ag-0001.csv",
+                "description":"Testing AG 0001",
+                "credentials": "AZURE_CREDENTIALS",
+                "validate": true,
+                "hubAccountId": "",
+                "includeTags":[
+                    {
+                        "key": "aks-managed-poolName",
+                        "value": ""
+                    }
+                ],
+                "customTags": [
+                    {
+                        "key": "custom_tag",
+                        "value": "testing"
+                    }
+                ],
+                "scanCap": "0"
+            },
+            {
+                "name": "api-testing-ag-0002",
+                "file": "api-testing-ag-0002.csv",
+                "description":"Testing AG 0002",
+                "credentials": "AZURE_CREDENTIALS2",
+                "validate": true,
+                "hubAccountId": "",
+                "includeTags":[
+                    {
+                        "key": "aks-managed-poolName",
+                        "value": ""
+                    }
+                ],
+                "customTags": [
+                    {
+                        "key": "custom_tag",
+                        "value": "testing2"
+                    }
+                ],
+                "scanCap": "0"
+            }
+        ]
+        
     }
 ]

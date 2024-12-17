@@ -20,14 +20,13 @@ headers = {
     "Content-Type": "application/json"
 }
 
-SUBNET_NAME = os.getenv("SUBNET_NAME", "")
-SECURITY_GROUP_NAME = os.getenv("SECURITY_GROUP_NAME", "")
-ORGANIZATION_ID = os.getenv("ORGANIZATION_ID", "")
-ORGANIZATION_TYPE = os.getenv("ORGANIZATION_TYPE", "")
+
+BULK_UPDATE_COUNT = int(os.getenv("BULK_UPDATE_COUNT", "20"))
 SLEEP = int(os.getenv("SLEEP", "5"))
 DEBUG = os.getenv("DEBUG", "false") in ("true", "True", "1", "y", "yes")
 CONFIG_FILE = os.getenv("CONFIG_FILE_AG", "accountGroups.json")
-COLUMN_NAME = os.getenv("COLUMN_NAME", "subscriptionId")
+COLUMN_SUBSCRIPTIONS = os.getenv("COLUMN_SUBSCRIPTIONS", "subscriptionId")
+COLUMN_NAMES = os.getenv("COLUMN_NAMES", "name")
 NON_ONBOARDED_FILE = os.getenv("NON_ONBOARDED_FILE", "nonOnboardedAccounts.json")
 VALIDATION_ERRORS = os.getenv("VALIDATION_ERRORS", "validationErrors.json")
 
@@ -38,6 +37,7 @@ class RequestError(Exception):
 
 def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, debug=DEBUG):
     global prisma_api_endpoint
+    global compute_api_endpoint
     global headers
     global username
     global password
@@ -69,12 +69,32 @@ def http_request(api_endpoint, path, body={}, method="POST", skip_error=False, d
     if debug: print(f"Error making request to {api_endpoint}{path}. Method: {method}. Body: {body}. Error message: {response.data}. Status code: {response.status}")
     return "{}"
 
-def createAccountGroup(name, account_ids, description = "", validate_accounts = False, create_account_group = True, client_id = "", debug = DEBUG):
+
+def createAccountGroup(
+        name, 
+        account_ids, 
+        account_names, 
+        hub_account_id = "", 
+        description = "", 
+        validate_accounts = False, 
+        dry_run = False, 
+        credentials_details = {}, 
+        onboard_account = True, 
+        update_credentials = True, 
+        account_groups = ["Default Account Group"], 
+        custom_tags = {},
+        include_tags = {},
+        scan_cap = "",
+        debug = DEBUG
+    ):
     # Load global variables
     global prisma_api_endpoint
+    global compute_api_endpoint
     global headers
     global username
     global password
+
+    print(f"Generating Account Group: {name}")
 
     # Obtain Authentication token
     token_body = {
@@ -84,6 +104,9 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
     prisma_token = json.loads(http_request(prisma_api_endpoint, "/login", token_body, debug=debug))["token"]
     headers["X-Redlock-Auth"] = prisma_token
 
+    if not compute_api_endpoint: compute_api_endpoint = json.loads(http_request(prisma_api_endpoint, "/meta_info", method="GET", debug=debug))["twistlockUrl"]
+
+
     with open(NON_ONBOARDED_FILE) as non_onboarded_file:
         non_onboarded_accounts = json.loads(non_onboarded_file.read())
 
@@ -92,37 +115,116 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
 
     non_onboarded_accounts[name] = []
     validation_errors[name] = {}
-    print(validation_errors)
-    account_ids_new = account_ids.copy() 
+    account_ids_new = account_ids.copy()
+    update_agentless_accounts = []
+
+    prisma_account_groups = json.loads(http_request(prisma_api_endpoint, "/cloud/group/name", method="GET", debug=debug))
+    account_group_ids = []
+
+    for prisma_account_group in prisma_account_groups:
+        if prisma_account_group["name"] in account_groups:
+            account_group_ids.append(prisma_account_group["id"])
 
     # Validate if Cloud Accounts exists
     if validate_accounts:
-        for account_id in account_ids:
-            response = json.loads(http_request(prisma_api_endpoint, f"/account/{account_id}/config/status", method="GET", skip_error=True))
+        for account_idx in range(len(account_ids)):
+            account_id = account_ids[account_idx]
+            account_details = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_id}", method="GET", skip_error=True))
                 
-            if not response:
+            if not account_details:
                 print(f"Account {account_id} is not onboarded on Prisma Cloud tenant")
-                non_onboarded_accounts[name].append(account_id)
-                account_ids_new.remove(account_id)
+                if not onboard_account:
+                    non_onboarded_accounts[name].append(account_id)
+                    account_ids_new.remove(account_id)
+                else:
+                    if credentials_details:
+                        
+                        new_account_details = {
+                            "cloudAccount": {
+                                "accountId": account_id,
+                                "accountType": "account",
+                                "enabled": True,
+                                "name": account_names[account_idx],
+                                "groupIds": account_group_ids
+                            },
+                            "clientId": credentials_details["clientId"],
+                            "environmentType": "azure",
+                            "key": credentials_details["key"],
+                            "monitorFlowLogs": True,
+                            "servicePrincipalId": credentials_details["servicePrincipalId"],
+                            "tenantId": credentials_details["tenantId"],
+                            "features": [
+                                {
+                                    "name": "Agentless Scanning",
+                                    "state": "enabled"
+                                },
+                                {
+                                    "name": "Serverless Function Scanning",
+                                    "state": "enabled"
+                                }
+                            ]
+                        }
+                        if not dry_run:  
+                            response = http_request(prisma_api_endpoint, f"/cas/v1/azure_account?skipStatusChecks=true", method="POST", body=new_account_details, debug=debug, skip_error=True)
+                            if response == "{}":
+                                non_onboarded_accounts[name].append(account_id)
+                                account_ids_new.remove(account_id)
+                                print(f"Cannot onboard {account_names[account_idx]} due to the name is duplicated. Subscription Id: {account_id}. Account Group: {name}\n")
+                            else:
+                                print(f"Onboarded account: {account_names[account_idx]}. Subscription Id: {account_id}. Account Group: {name}\n")
+                                update_agentless_accounts.append(account_id)
+                        else:
+                            print(f"Onboarded account: {account_names[account_idx]}. Subscription Id: {account_id} Account Group: {name}\n")
+                            update_agentless_accounts.append(account_id)        
+
             else:
                 errors = {}
-                agentless_enabled = False
-                serverless_enabled = False
-                for feature in response:
-                    if feature["name"] == "Authentication":
-                        if feature["status"] == "error":
-                            errors["Authentication"] = "error"
-                    elif feature["name"] == "Agentless Scanning":
-                        agentless_enabled = True
-                    elif feature["name"] == "Serverless Function Scanning":
-                        serverless_enabled = True
-                
-                if not agentless_enabled: errors["agentless_enabled"] = False
-                if not serverless_enabled: errors["serverless_enabled"] = False
-                if client_id:
-                    prisma_clientId = json.loads(http_request(prisma_api_endpoint, f"/v1/cloudAccounts/azureAccounts/{account_id}", method="GET", skip_error=True))["clientId"]
-                    if client_id != prisma_clientId:
+                agentless_enabled = True
+                serverless_enabled = True
+
+                for feature in account_details["cloudAccount"]["features"]:
+                    if feature["featureName"] == "compute-agentless":
+                        agentless_enabled = feature["featureState"] == "enabled"
+                    if feature["featureName"] == "compute-serverless-scan":
+                        serverless_enabled = feature["featureState"] == "enabled"
+
+                prisma_clientId = account_details["clientId"]
+
+                if not agentless_enabled: 
+                    errors["agentless_enabled"] = False
+                    if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_id}/feature/compute-agentless", body={"state": "enabled"}, method="PATCH", debug=debug)
+
+                if not serverless_enabled: 
+                    errors["serverless_enabled"] = False
+                    if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_id}/feature/compute-serverless-scan", body={"state": "enabled"}, method="PATCH", debug=debug)
+
+                if credentials_details:
+                    if credentials_details["clientId"] != prisma_clientId:
                         errors["credentials_error"] = True
+                
+                        if update_credentials:
+                            account_details.update(credentials_details)
+                            new_account_details = {
+                                "cloudAccount": {
+                                    "accountId": account_details["cloudAccount"]["accountId"],
+                                    "accountType": account_details["cloudAccount"]["accountType"],
+                                    "name": account_details["cloudAccount"]["name"],
+                                    "groupIds": account_details["groupIds"]
+                                },
+                                "monitorFlowLogs": account_details["monitorFlowLogs"],
+                                "environmentType": account_details["environmentType"],
+                                "authMode": account_details["authMode"],
+                                "tenantId": account_details["tenantId"],
+                                "clientId": account_details["clientId"],
+                                "servicePrincipalId": account_details["servicePrincipalId"],
+                                "key": account_details["key"]
+                            }
+                            # Update credentials
+                            if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
+                            if debug: print(f"Updated credentials for account {account_id}. Account Group: {account_group['name']} \n")
+                            
+                            update_agentless_accounts.append(account_id)
+
 
                 if errors:
                     validation_errors[name][account_id] = errors
@@ -152,30 +254,104 @@ def createAccountGroup(name, account_ids, description = "", validate_accounts = 
         "nonOnboardedCloudAccountIds": []
     }
 
-    if create_account_group:
+    if not dry_run:
         if group_id:
             http_request(prisma_api_endpoint, f"/cloud/group/{group_id}", method="PUT", body=body, debug=debug)
         else:
             http_request(prisma_api_endpoint, f"/cloud/group", method="POST", body=body, debug=debug)
 
 
+    accounts_len = len(update_agentless_accounts)
+
+    if accounts_len > 0:
+        idx = 0
+        while idx < accounts_len:
+            if idx + BULK_UPDATE_COUNT < accounts_len:
+                accounts_filter = ",".join(update_agentless_accounts[idx:idx+BULK_UPDATE_COUNT])
+            else:
+                accounts_filter = ",".join(update_agentless_accounts[idx:])
+
+            data = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={accounts_filter}", method="GET", debug=debug))
+            for account in data:
+                if hub_account_id: 
+                    account["agentlessScanSpec"]["hubAccount"] = False
+                    account["agentlessScanSpec"]["hubCredentialID"] = hub_account_id
+                    account["agentlessScanSpec"]["scanners"] = 0
+                    account["agentlessScanSpec"]["autoScale"] = False
+                    account["agentlessScanSpec"]["skipPermissionsCheck"] = True
+
+                if include_tags: 
+                    if include_tags == ["none"]:
+                        account["agentlessScanSpec"]["includedTags"] = []
+                    else:
+                        account["agentlessScanSpec"]["includedTags"] = include_tags
+                        
+                    if "excludedTags" in account["agentlessScanSpec"]:
+                        del account["agentlessScanSpec"]["excludedTags"]
+
+
+                if custom_tags: 
+                    if custom_tags == ["none"]:
+                        account["agentlessScanSpec"]["customTags"] = []
+                    else:
+                        account["agentlessScanSpec"]["customTags"] = custom_tags
+                
+                
+                if scan_cap: account["serverlessScanSpec"]["cap"] = int(scan_cap)
+
+            # Update agentless scanning
+            if not dry_run: http_request(compute_api_endpoint,"/api/v1/cloud-scan-rules", data, method="PUT", debug=debug)
+
+            idx += BULK_UPDATE_COUNT
+
+
+
+
 if __name__ == "__main__":
     with open(CONFIG_FILE) as config_file:
         config = json.loads(config_file.read())
 
-    for account_group in config:
-        description = ""
-        validate = False
-        create_account_group = True
-        client_id = ""
-        name = account_group["name"]
-        
-        if "description" in account_group: description = account_group["description"]
-        if "validate" in account_group: validate = account_group["validate"]
-        if "create_account_group" in account_group: create_account_group = account_group["create_account_group"] 
-        if "clientId" in account_group: client_id = account_group["clientId"]
+    for prisma_config in config:
+        dry_run = False
 
-        account_ids_data = read_csv(account_group["file"])
-        account_ids = account_ids_data[COLUMN_NAME].to_list()
+        if "prisma_api_endpoint" in prisma_config: prisma_api_endpoint = os.getenv(prisma_config["prisma_api_endpoint"], "https://api.prismacloud.io")
+        if "compute_api_endpoint" in prisma_config: compute_api_endpoint = os.getenv(prisma_config["compute_api_endpoint"], "")
+        if "username" in prisma_config: username = os.getenv(prisma_config["username"], "")
+        if "password" in prisma_config: password = os.getenv(prisma_config["password"], "")
+        if "dry_run" in prisma_config: dry_run = prisma_config["dry_run"]
 
-        createAccountGroup(name, account_ids, description, validate, create_account_group, client_id)
+        for account_group in prisma_config["account_groups"]:
+            name = account_group["name"]
+            description = ""
+            hub_account_id = ""
+            validate = False
+            credentials_details = {}
+            custom_tags = {}
+            include_tags = {}
+            scan_cap = ""
+
+            if "description" in account_group: description = account_group["description"]
+            if "validate" in account_group: validate = account_group["validate"]
+            if "credentials" in account_group: credentials_details = json.loads(os.getenv(account_group["credentials"], ""))
+            if "hubAccountId" in account_group: hub_account_id = account_group["hubAccountId"]
+            if "customTags" in account_group: custom_tags = account_group["customTags"]
+            if "includeTags" in account_group: include_tags = account_group["includeTags"]
+            if "scanCap" in account_group: scan_cap = account_group["scanCap"]
+
+            account_ids_data = read_csv(account_group["file"])
+            account_ids = account_ids_data[COLUMN_SUBSCRIPTIONS].to_list()
+            account_names = account_ids_data[COLUMN_NAMES].to_list()
+
+            createAccountGroup(
+                name=name, 
+                account_ids=account_ids, 
+                account_names=account_names,
+                hub_account_id=hub_account_id, 
+                description=description, 
+                validate_accounts=validate, 
+                dry_run=dry_run, 
+                credentials_details=credentials_details,
+                custom_tags=custom_tags,
+                include_tags=include_tags,
+                scan_cap=scan_cap
+            )
