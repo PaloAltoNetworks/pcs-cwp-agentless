@@ -118,6 +118,7 @@ def createAccountGroup(
     validation_errors[name] = {}
     account_ids_new = account_ids.copy()
     update_agentless_accounts = []
+    onboard_account_counts = 0
 
     # Validate if Account Groups exists 
     account_group_ids = []
@@ -186,6 +187,7 @@ def createAccountGroup(
                             else:
                                 print(f"Onboarded account: {account_names[account_idx]}. Subscription Id: {account_id}. Account Group: {name}\n")
                                 update_agentless_accounts.append(account_id)
+                                onboard_account_counts += 1
                         else:
                             print(f"Onboarded account: {account_names[account_idx]}. Subscription Id: {account_id} Account Group: {name}\n")
                             update_agentless_accounts.append(account_id)        
@@ -212,33 +214,40 @@ def createAccountGroup(
                     if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/cloud_account/{account_id}/feature/compute-serverless-scan", body={"state": "enabled"}, method="PATCH", debug=debug)
 
                 if credentials_details:
+                    update_account = False
+
                     if credentials_details["clientId"] != prisma_clientId:
                         errors["credentials_error"] = True
                         account_details.update(credentials_details)
-                        print(f"Credentials mistmatch in account {account_id}. Account Group: {name}\n")                        
+                        update_agentless_accounts.append(account_id)
+                        if debug: print(f"Credentials mistmatch in account {account_id}. Account Group: {name}\n") 
+                        update_account = True                      
 
-                group_ids = list((set(account_details["groupIds"]) | set(account_group_ids)) - set(excluded_groups_ids))
-                new_account_details = {
-                    "cloudAccount": {
-                        "accountId": account_details["cloudAccount"]["accountId"],
-                        "accountType": account_details["cloudAccount"]["accountType"],
-                        "name": account_details["cloudAccount"]["name"],
-                        "groupIds": group_ids
-                    },
-                    "monitorFlowLogs": account_details["monitorFlowLogs"],
-                    "environmentType": account_details["environmentType"],
-                    "authMode": account_details["authMode"],
-                    "tenantId": account_details["tenantId"],
-                    "clientId": account_details["clientId"],
-                    "servicePrincipalId": account_details["servicePrincipalId"],
-                    "key": account_details["key"]
-                }
-                # Update credentials
-                if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
-                if debug: print(f"Updated credentials for account {account_id}. Account Group: {account_group['name']} \n")
-                
-                update_agentless_accounts.append(account_id)
+                for excluded_group_id in excluded_groups_ids:
+                    if excluded_group_id in account_details["groupIds"]:
+                        update_account = True
+                        if debug: print(f"Required to exclude group from Account {account_id}. Account Group: {name}\n") 
 
+                if update_account:
+                    group_ids = list((set(account_details["groupIds"]) | set(account_group_ids)) - set(excluded_groups_ids))
+                    new_account_details = {
+                        "cloudAccount": {
+                            "accountId": account_details["cloudAccount"]["accountId"],
+                            "accountType": account_details["cloudAccount"]["accountType"],
+                            "name": account_details["cloudAccount"]["name"],
+                            "groupIds": group_ids
+                        },
+                        "monitorFlowLogs": account_details["monitorFlowLogs"],
+                        "environmentType": account_details["environmentType"],
+                        "authMode": account_details["authMode"],
+                        "tenantId": account_details["tenantId"],
+                        "clientId": account_details["clientId"],
+                        "servicePrincipalId": account_details["servicePrincipalId"],
+                        "key": account_details["key"]
+                    }
+                    # Update credentials
+                    if not dry_run: http_request(prisma_api_endpoint, f"/cas/v1/azure_account/{account_id}?skipStatusChecks=true", method="PUT", body=new_account_details, debug=debug)
+                    if debug: print(f"Updated account {account_id}. Account Group: {account_group['name']} \n")
 
                 if errors:
                     validation_errors[name][account_id] = errors
@@ -311,6 +320,9 @@ def createAccountGroup(
                 if not dry_run: http_request(compute_api_endpoint,"/api/v1/cloud-scan-rules", data, method="PUT", debug=debug)
 
             idx += BULK_UPDATE_COUNT
+    
+    print(f"Total Onboarded Accounts: {onboard_account_counts}")
+    print(f"Total modified accounts in agentless: {accounts_len}")
 
 
 
