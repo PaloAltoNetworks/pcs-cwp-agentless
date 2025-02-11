@@ -319,7 +319,8 @@ def configAgentless(
     radar_cap = 0,
     radar_latest = "",
     serverless_state = "",
-    credentials = None
+    credentials = None,
+    update_hub = True
 ):
     global prisma_api_endpoint
     global compute_api_endpoint
@@ -454,7 +455,7 @@ def configAgentless(
     compute_accounts = getCloudAccountsList(compute_api_endpoint, limit, organization_type, scan_mode, debug=debug)
     data = []
 
-    if hub_account_id:
+    if update_hub and hub_account_id:
         # Updating Hub Account
         print(f"Updating Hub Account: {hub_account_id}")
         hub_account = json.loads(http_request(compute_api_endpoint, f"/api/v1/cloud-scan-rules?cloudProviderAccountIDs={hub_account_id}&offset=0&limit=10", method="GET", debug=debug))[0]
