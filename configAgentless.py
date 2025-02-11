@@ -106,14 +106,14 @@ def getCloudAccountsList(api_endpoint, limit=50, provider="", scan_mode="", debu
     return accounts
 
 
-def updateAgentlessConfig(data, api_endpoint, bulk_update_count=20, debug=DEBUG):
+def updateAgentlessConfig(data, api_endpoint, bulk_update_count=20, debug=DEBUG, skip_error=False):
     accounts_count = len(data)
 
     for i in range(0, accounts_count, bulk_update_count):
         if i + bulk_update_count < accounts_count:
-            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:i+bulk_update_count], method="PUT", debug=debug)
+            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:i+bulk_update_count], method="PUT", debug=debug, skip_error=skip_error)
         else:
-            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:], method="PUT", debug=debug)
+            http_request(api_endpoint,"/api/v1/cloud-scan-rules", data[i:], method="PUT", debug=debug, skip_error=skip_error)
 
 
 def formatTags(tags_list, list_name=""):
@@ -482,7 +482,7 @@ def configAgentless(
         )
         if debug: print(f"Hub Account {hub_account_id} configuration: {updated_hub_account}\n")
 
-        updateAgentlessConfig([updated_hub_account], compute_api_endpoint, bulk_update_count, debug=debug)
+        updateAgentlessConfig([updated_hub_account], compute_api_endpoint, bulk_update_count, debug=debug, skip_error=True)
 
         set_as_hub = "false"
         subnet_name = ""
@@ -550,8 +550,6 @@ def configAgentless(
     updateAgentlessConfig(data, compute_api_endpoint, bulk_update_count, debug=debug)
     print(f"Total Target Accounts Modified: {len(data)}")
 
-
-    
 
 if __name__ == "__main__":
 
