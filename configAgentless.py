@@ -463,7 +463,7 @@ def configAgentless(
             subnet_name, 
             security_group_name, 
             auto_scale, 
-            regions, 
+            "", 
             ["none"], 
             ["none"],
             custom_tags,
