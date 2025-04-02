@@ -97,7 +97,7 @@ def getHostsStatus(debug = DEBUG):
         hosts_status_path += f"?scanIDs={SCAN_IDS}"
     else:
         # Get current scan ID
-        cloud_scans = json.loads(http_request(compute_api_endpoint, "/api/v1/cloud-scan-rules?limit=1&reverse=true", method="GET", debug=debug))
+        cloud_scans = json.loads(http_request(compute_api_endpoint, "/api/v1/cloud-scan-rules?agentlessScanEnabled=true&limit=1&reverse=true", method="GET", debug=debug))
         scan_id = cloud_scans[0]["agentlessAccountState"]["regions"][0]["scanID"]
         hosts_status_path += f"?scanIDs={scan_id}"
 
