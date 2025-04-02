@@ -12,20 +12,20 @@
             "accountGroups": [],
             "accountIds": [],
             "credentials": "",
-            "onboardingMode":"org",
-            "scanMode": "",
+            "onboardingMode": "org",
+            "scanMode": "target",
             "agentless": {
                 "hubAccountId": "",
                 "subnetName": "",
                 "securityGroupName": "",
-                "excludeTags": [
+                "excludeTags": [],
+                "includeTags": [],
+                "customTags": [
                     {
                         "key": "",
                         "value": ""
                     }
                 ],
-                "includeTags": [],
-                "customTags": [],
                 "regions": [],
                 "scanners": 0,
                 "scanNonRunning": "false",
@@ -43,7 +43,7 @@
                 "radarCap": 0,
                 "radarLatest": "true",
                 "serverlessState": ""
-            }            
+            }
         }
     ]
 }
