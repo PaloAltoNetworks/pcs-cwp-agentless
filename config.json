@@ -1,7 +1,6 @@
 {
     "findInOrg": false,
     "debug": true,
-    "backup": "",
     "limit": 50,
     "bulkUpdateCount": 20,
     "accountSets": [
